@@ -278,19 +278,54 @@ async def get_sourcing_for_cluster(cluster) -> tuple[str, str, str]:
         f"{supplier_price_cny:.2f} CNY = {price_usd_str} USD | {supplier_url[:80]}"
     )
 
-    # ── Weight extraction from 1688 product page ─────────────────────────────
+    # ── Weight extraction: resolve URL then scrape 1688 ──────────────────────
     weight_gram_str = ""
-    if supplier_url and "1688.com" in supplier_url:
+    if supplier_url:
         try:
-            weight_gram_str = await asyncio.wait_for(
-                _extract_weight_from_1688(supplier_url), timeout=30
+            # supplier_url may be a fatkun URL — resolve it to the real 1688 URL first
+            url_for_weight = await asyncio.wait_for(
+                _resolve_to_1688_url(supplier_url), timeout=15
             )
-            if weight_gram_str:
-                logger.info(f"[sourcing] weight from 1688: {weight_gram_str}g")
+            if url_for_weight and "1688.com" in url_for_weight:
+                weight_gram_str = await asyncio.wait_for(
+                    _extract_weight_from_1688(url_for_weight), timeout=30
+                )
+                if weight_gram_str:
+                    logger.info(f"[sourcing] weight: {weight_gram_str}g from {url_for_weight[:60]}")
         except Exception as e:
             logger.warning(f"[sourcing] weight extraction failed: {e}")
 
     return (price_usd_str, supplier_url, weight_gram_str)
+
+
+# ── URL resolver: fatkun → 1688 ──────────────────────────────────────────────
+
+async def _resolve_to_1688_url(url: str) -> str:
+    """
+    If url is already a 1688.com URL, return it directly.
+    If it's a fatkun URL, follow the HTTP redirect chain to find the 1688 URL.
+    Returns "" if resolution fails or lands on a non-1688 page.
+    """
+    if "1688.com" in url:
+        return url
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=12,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        ) as client:
+            resp = await client.get(url)
+            final_url = str(resp.url)
+            if "1688.com" in final_url:
+                logger.info(f"[sourcing] resolved fatkun → 1688: {final_url[:80]}")
+                return final_url
+            # Check if the HTML body contains a 1688 link
+            m = re.search(r'https?://[^"\'>\s]*1688\.com/offer/\d+', resp.text)
+            if m:
+                logger.info(f"[sourcing] found 1688 link in fatkun page: {m.group()[:80]}")
+                return m.group()
+    except Exception as e:
+        logger.debug(f"[sourcing] _resolve_to_1688_url failed: {e}")
+    return ""
 
 
 # ── 1688 weight extraction ────────────────────────────────────────────────────
