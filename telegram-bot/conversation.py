@@ -771,7 +771,8 @@ async def _do_extraction(
                         pass
 
                 await progress(
-                    f"  [{i+1}/{len(round_valid)}] *{product_name[:40]}*\n"
+                    f"  *{i+1}/{len(round_valid)}*\n"
+                    f"  {product_name[:45] or '(unnamed)'}\n"
                     f"    Sourcing: {sourcing_display} | Weight: {weight_display} | "
                     f"Variants: {has_variants} | {save_status}"
                 )

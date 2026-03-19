@@ -297,51 +297,98 @@ async def get_sourcing_for_cluster(cluster) -> tuple[str, str, str]:
 
 async def _extract_weight_from_1688(url: str) -> str:
     """
-    Visit a 1688.com product page and extract the weight in grams from the
-    Packing table (重量(g) column).  Returns a string like "500" or "" if not found.
-    Uses httpx (no browser) — fast and avoids Playwright overhead.
-    Falls back to empty string on any error.
+    Visit a 1688.com product page with Playwright and extract the weight in grams
+    from the Packing table (重量(g) column) or embedded JSON.
+    Returns a string like "500" or "" if not found.
     """
     try:
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-            "Referer": "https://www.1688.com/",
-        }
-        async with httpx.AsyncClient(
-            follow_redirects=True, timeout=20, headers=headers
-        ) as client:
-            resp = await client.get(url)
-            html = resp.text
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            ctx = await browser.new_context(
+                viewport={"width": 1280, "height": 900},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                ),
+                locale="zh-CN",
+            )
+            page = await ctx.new_page()
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                # Give JS a moment to render product attributes
+                await page.wait_for_timeout(3000)
 
-        # Strategy 1: look for 重量 followed by digits inside the HTML text
-        # Matches patterns like: 重量(g)</th>...500 or 重量：500g etc.
-        patterns = [
-            # table cell pattern: 重量(g) header → value in next td
-            r'重量[（(][gG克][)）][^<]{0,30}?(\d+(?:\.\d+)?)',
-            # JSON data embedded in page scripts (1688 often embeds product data as JSON)
-            r'"weight"\s*:\s*"?(\d+(?:\.\d+)?)"?',
-            r'"grossWeight"\s*:\s*"?(\d+(?:\.\d+)?)"?',
-            r'"packageWeight"\s*:\s*"?(\d+(?:\.\d+)?)"?',
-            # plain text weight mentions near "g" unit
-            r'重量[：:]\s*(\d+(?:\.\d+)?)\s*[gG克]',
-        ]
-        for pat in patterns:
-            m = re.search(pat, html)
-            if m:
-                val = float(m.group(1))
-                # sanity: product weight should be between 1g and 50,000g (50kg)
-                if 1 <= val <= 50000:
-                    return str(int(val) if val == int(val) else val)
+                weight = await page.evaluate("""() => {
+                    // ── Strategy 1: look for 重量 header in any table ──────────
+                    const tables = document.querySelectorAll('table');
+                    for (const table of tables) {
+                        const headers = table.querySelectorAll('th, td');
+                        for (let i = 0; i < headers.length; i++) {
+                            const txt = headers[i].textContent.trim();
+                            if (txt.includes('重量') && (txt.includes('g') || txt.includes('G') || txt.includes('克'))) {
+                                // value is in the next cell of the same row
+                                const row = headers[i].closest('tr');
+                                if (row) {
+                                    const cells = row.querySelectorAll('td');
+                                    for (const cell of cells) {
+                                        const v = cell.textContent.trim();
+                                        const m = v.match(/^(\d+(?:\.\d+)?)\s*$/);
+                                        if (m) return m[1];
+                                    }
+                                }
+                                // or in the sibling td
+                                const next = headers[i].nextElementSibling;
+                                if (next) {
+                                    const m = next.textContent.trim().match(/(\d+(?:\.\d+)?)/);
+                                    if (m) return m[1];
+                                }
+                            }
+                        }
+                    }
 
-        return ""
+                    // ── Strategy 2: scan all text nodes for 重量 pattern ──────
+                    const bodyText = document.body.innerText;
+                    const patterns = [
+                        /重量[（(][gG克][)）][^\d]{0,20}(\d+(?:\.\d+)?)/,
+                        /重量[：:]\s*(\d+(?:\.\d+)?)\s*[gG克]/,
+                        /净重[：:]\s*(\d+(?:\.\d+)?)\s*[gG克]/,
+                    ];
+                    for (const pat of patterns) {
+                        const m = bodyText.match(pat);
+                        if (m) return m[1];
+                    }
+
+                    // ── Strategy 3: check page JSON data (window vars) ────────
+                    try {
+                        const scripts = document.querySelectorAll('script');
+                        for (const s of scripts) {
+                            const t = s.textContent;
+                            let m;
+                            m = t.match(/"(?:grossWeight|packageWeight|weight)"\s*:\s*"?(\d+(?:\.\d+)?)"?/);
+                            if (m) return m[1];
+                        }
+                    } catch(e) {}
+
+                    return null;
+                }""")
+
+                if weight:
+                    val = float(weight)
+                    if 1 <= val <= 50000:
+                        logger.info(f"[sourcing] 1688 weight extracted: {val}g from {url[:60]}")
+                        return str(int(val) if val == int(val) else val)
+
+            finally:
+                await browser.close()
+
     except Exception as e:
         logger.debug(f"[sourcing] _extract_weight_from_1688 error: {e}")
-        return ""
+
+    return ""
 
 
 # ── Product page screenshot ───────────────────────────────────────────────────
