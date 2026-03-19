@@ -20,7 +20,7 @@ _DEFAULT_CONFIG = {
     "pixel_name":       "",
     "conversion_event": "Purchase",
     "country":          "GN",
-    "daily_budget_usd": 5.0,
+    "daily_budget":     5000.0,    # in account's native currency (NOT USD)
     "objective":        "OUTCOME_SALES",
     "cta":              "SHOP_NOW",
     "timezone":         "Africa/Conakry",
@@ -50,6 +50,12 @@ def load_config() -> dict:
                 saved = json.load(f)
             cfg = dict(_DEFAULT_CONFIG)
             cfg.update(saved)
+            # Migrate old key: daily_budget_usd → daily_budget
+            if "daily_budget_usd" in cfg and "daily_budget" not in saved:
+                cfg["daily_budget"] = cfg.pop("daily_budget_usd")
+                logger.info("[ads_config] Migrated daily_budget_usd → daily_budget")
+            elif "daily_budget_usd" in cfg:
+                cfg.pop("daily_budget_usd", None)
             return cfg
         except Exception as e:
             logger.error(f"[ads_config] Failed to load: {e}")

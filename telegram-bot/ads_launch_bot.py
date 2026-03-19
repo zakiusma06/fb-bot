@@ -41,6 +41,42 @@ import ads_rules         as rules_mod
 
 logger = logging.getLogger(__name__)
 
+# ── Access control ─────────────────────────────────────────────────────────────
+# Set ALLOWED_TELEGRAM_USER_IDS in your .env as a comma-separated list of IDs.
+# Example: ALLOWED_TELEGRAM_USER_IDS=123456789,987654321
+# If the env var is not set, the bot rejects everyone and logs a warning.
+def _allowed_ids() -> set[int]:
+    raw = os.environ.get("ALLOWED_TELEGRAM_USER_IDS", "").strip()
+    if not raw:
+        return set()
+    ids = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.add(int(part))
+    return ids
+
+
+async def _auth(update: Update) -> bool:
+    """Return True if the user is allowed. Silently ignores unknown users."""
+    allowed = _allowed_ids()
+    if not allowed:
+        logger.warning(
+            "[auth] ALLOWED_TELEGRAM_USER_IDS is not set — all users are blocked. "
+            "Add your Telegram user ID to the env var."
+        )
+        await update.effective_message.reply_text(
+            "⚠️ Bot not configured: `ALLOWED_TELEGRAM_USER_IDS` is not set.\n"
+            "Add your Telegram user ID to the environment variables.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return False
+    uid = update.effective_user.id
+    if uid not in allowed:
+        logger.warning(f"[auth] Blocked unauthorised user {uid}")
+        return False
+    return True
+
 # ── Session storage ────────────────────────────────────────────────────────────
 _sessions: dict[int, dict] = {}
 
@@ -157,7 +193,7 @@ def _format_settings(cfg: dict) -> str:
         f"• Pixel ID: `{cfg.get('pixel_id') or '—'}` ({cfg.get('pixel_name') or '?'})\n"
         f"• Conversion Event: `{cfg.get('conversion_event', 'Purchase')}`\n"
         f"• Country: `{cfg.get('country', 'GN')}`\n"
-        f"• Daily Budget: `${cfg.get('daily_budget_usd', 5.0):.2f} USD`\n"
+        f"• Daily Budget: `{cfg.get('daily_budget', 5000.0):,.0f} {cfg.get('currency', 'USD')}`\n"
         f"• Objective: `{obj_label}`\n"
         f"• CTA: `{cfg.get('cta', 'SHOP_NOW')}`\n"
         f"• Timezone: `{cfg.get('timezone', 'Africa/Conakry')}`"
@@ -188,17 +224,23 @@ _HELP_TEXT = (
 
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _auth(update):
+        return
     _save_monitor_chat_id(update.effective_chat.id)
     await _reply(update, _HELP_TEXT)
 
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _auth(update):
+        return
     await _reply(update, _HELP_TEXT)
 
 
 # ── /cancel ───────────────────────────────────────────────────────────────────
 
 async def cmd_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _auth(update):
+        return
     uid = update.effective_user.id
     _clear(uid)
     _stats_sessions.pop(uid, None)
@@ -221,10 +263,12 @@ def _setup_sess(uid: int) -> dict:
 
 
 async def cmd_setup_meta(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _auth(update):
+        return
     uid = update.effective_user.id
     s   = _setup_sess(uid)
     await _reply(update, "⏳ Fetching your Meta ad accounts…")
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         accts = await loop.run_in_executor(None, meta.fetch_ad_accounts)
     except Exception as e:
@@ -252,7 +296,7 @@ async def _cb_setup(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     s    = _sessions.get(uid)
     if not s:
         return
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # ── Step 1: Ad account selected ──────────────────────────────────────────
     if data.startswith("su_acct:"):
@@ -428,6 +472,8 @@ async def _cb_setup_val(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ── /launch ───────────────────────────────────────────────────────────────────
 
 async def cmd_launch(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _auth(update):
+        return
     uid = update.effective_user.id
     _rules_sessions.pop(uid, None)
     _stats_sessions.pop(uid, None)
@@ -517,7 +563,7 @@ async def _cb_launch(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         label    = "ADS ERROR" if is_error else "READY FOR ADS"
         await _reply(update, f"📂 Loading products from *{label}*…")
         loader = sheet.load_ads_error if is_error else sheet.load_ready_to_ads
-        products = await asyncio.get_event_loop().run_in_executor(None, loader)
+        products = await asyncio.get_running_loop().run_in_executor(None, loader)
         if not products:
             await _reply(update, f"No products found in *{label}*.")
             _clear(uid)
@@ -617,7 +663,7 @@ async def _cb_creative_select(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def _handle_text_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid   = update.effective_user.id
     text  = update.message.text.strip()
-    loop  = asyncio.get_event_loop()
+    loop  = asyncio.get_running_loop()
 
     # ── Rules value input ─────────────────────────────────────────────────────
     rules_sess = _rules_sessions.get(uid)
@@ -691,21 +737,24 @@ async def _handle_text_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
         s["settings"]["country"] = country
         s["state"] = S_SETUP_BUDGET
+        currency = s["settings"].get("currency", "USD")
         await _reply(update,
             f"✅ Country: *{country}*\n\n"
-            "💵 Enter the *daily budget in USD* _(e.g. 5 or 10.00)_:"
+            f"💵 Enter the *daily budget in {currency}* _(in your ad account's native currency)_\n"
+            f"_e.g. `5000` for {currency}_:"
         )
         return
 
     if state == S_SETUP_BUDGET:
         try:
-            budget = float(text.replace(",", "."))
+            budget = float(text.replace(",", ".").replace(" ", ""))
             if budget <= 0:
                 raise ValueError
         except ValueError:
-            await _reply(update, "Please enter a valid positive number (e.g. `5.00`).")
+            currency = s["settings"].get("currency", "")
+            await _reply(update, f"Please enter a valid positive number (e.g. `5000` for {currency}).")
             return
-        s["settings"]["daily_budget_usd"] = budget
+        s["settings"]["daily_budget"] = budget
         await _setup_ask_objective(update, s)
         return
 
@@ -753,7 +802,7 @@ async def _handle_text_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def _run_copy_generation(update: Update, s: dict):
     p = s["product"]
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         result = await asyncio.wait_for(
             loop.run_in_executor(None, lambda: copy_gen.generate_ad_copy(
@@ -778,12 +827,16 @@ async def _run_copy_generation(update: Update, s: dict):
             n_texts      = s["copy_n_texts"],
             n_headlines  = s["copy_n_heads"],
         )
-        await _reply(update, "⚠️ AI copy took too long — using template copy instead. You can regenerate at any time.")
+        result["is_fallback"] = True
+        await _reply(update, "⚠️ *AI copy timed out* — showing template copy. Hit 🔄 Regenerate All to retry.")
     s["generated_texts"]   = result.get("primary_texts", [])
     s["generated_heads"]   = result.get("headlines", [])
     s["selected_text"]     = list(s["generated_texts"])
     s["selected_headline"] = list(s["generated_heads"])
     s["state"] = S_COPY_PICK_TEXT
+    # Warn if AI failed silently (non-timeout) and template copy is being shown
+    if result.get("is_fallback") and "timed out" not in result.get("_fallback_reason", "timed out"):
+        await _reply(update, "⚠️ *AI copy failed* — showing template copy. Hit 🔄 Regenerate All to retry once your API key is working.")
     await _show_copy_review(update, s)
 
 
@@ -849,7 +902,7 @@ async def _cb_copy(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if data == "copy:regen_texts":
         s["state"] = S_COPY_GENERATING
         await _reply(update, "⏳ Regenerating texts…")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         p = s["product"]
         try:
             result = await asyncio.wait_for(
@@ -874,7 +927,7 @@ async def _cb_copy(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if data == "copy:regen_heads":
         s["state"] = S_COPY_GENERATING
         await _reply(update, "⏳ Regenerating headlines…")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         p = s["product"]
         try:
             result = await asyncio.wait_for(
@@ -911,7 +964,7 @@ async def _show_settings_review(update: Update, s: dict):
     kb = _kb(
         [("✅ Approve Settings", "settings:approve"), ("✏️ Edit Ad Account", "settings:edit:ad_account_id")],
         [("✏️ Edit Page ID", "settings:edit:page_id"), ("✏️ Edit Pixel ID", "settings:edit:pixel_id")],
-        [("✏️ Edit Country", "settings:edit:country"), ("✏️ Edit Budget", "settings:edit:daily_budget_usd")],
+        [("✏️ Edit Country", "settings:edit:country"), ("✏️ Edit Budget", "settings:edit:daily_budget")],
         [("✏️ Edit Objective", "settings:edit:objective"), ("✏️ Edit Event", "settings:edit:conversion_event")],
         [("✏️ Edit CTA", "settings:edit:cta"), ("✏️ Edit Timezone", "settings:edit:timezone")],
         [("🛑 Cancel", "launch:stop")],
@@ -958,7 +1011,7 @@ async def _cb_settings(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "page_id":          "Enter Facebook Page ID:",
             "pixel_id":         "Enter Meta Pixel ID:",
             "country":          "Enter 2-letter country code (GN, FR, US…):",
-            "daily_budget_usd": "Enter daily budget in USD (e.g. 5.00):",
+            "daily_budget":      f"Enter daily budget in {s['settings'].get('currency', 'USD')} (e.g. 5000):",
             "timezone":         "Enter timezone (e.g. Africa/Conakry):",
         }
         s["state"] = S_SETTINGS_EDIT
@@ -996,10 +1049,10 @@ async def _handle_settings_edit_input(update: Update, text: str, s: dict):
     field = s.get("awaiting_setup_field")
     if not field:
         return
-    if field == "daily_budget_usd":
+    if field == "daily_budget":
         try:
-            val = float(text.replace(",", "."))
-            s["settings"][field] = val
+            val = float(text.replace(",", ".").replace(" ", ""))
+            s["settings"]["daily_budget"] = val
         except ValueError:
             await _reply(update, "Please enter a valid number (e.g. 5.00).")
             return
@@ -1080,7 +1133,7 @@ async def _show_final_summary(update: Update, s: dict):
         f"*Ad Account:* `{cfg.get('ad_account_id', '—')}`\n"
         f"*Page ID:* `{cfg.get('page_id', '—')}`\n"
         f"*Country:* `{cfg.get('country', '—')}`\n"
-        f"*Daily Budget:* `${cfg.get('daily_budget_usd', 5.0):.2f} USD`\n"
+        f"*Daily Budget:* `{cfg.get('daily_budget', 5000.0):,.0f} {cfg.get('currency', 'USD')}`\n"
         f"*Objective:* `{obj_label}`\n"
         f"*Pixel:* `{cfg.get('pixel_id', '—')}`\n"
         f"*Conversion Event:* `{cfg.get('conversion_event', '—')}`\n"
@@ -1128,6 +1181,13 @@ async def _cb_final(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
     uid = update.effective_user.id
+
+    # Guard: prevent double-publish if already in progress
+    if s.get("_publish_in_progress"):
+        await update.effective_message.reply_text("⏳ Already publishing — please wait.")
+        return
+    s["_publish_in_progress"] = True
+
     p   = s["product"]
     cfg = s["settings"]
 
@@ -1140,28 +1200,28 @@ async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
     pixel_id      = cfg.get("pixel_id", "")
     conversion_ev = cfg.get("conversion_event", "Purchase")
     country       = cfg.get("country", "GN")
-    budget_usd    = float(cfg.get("daily_budget_usd", 5.0))
-    daily_budget_cents = int(budget_usd * 100)
+    # Budget is stored in the account's native currency; Meta expects minor units (×100)
+    daily_budget       = float(cfg.get("daily_budget", cfg.get("daily_budget_usd", 5000.0)))
+    daily_budget_minor = int(daily_budget * 100)
     objective     = cfg.get("objective", "OUTCOME_SALES")
     cta           = cfg.get("cta", "SHOP_NOW")
     start_time    = s.get("scheduled_time_iso") or None
     ad_type       = "FLEXIBLE" if len(s["selected_urls"]) > 1 else "NORMAL"
-    loop          = asyncio.get_event_loop()
+    loop          = asyncio.get_running_loop()
 
-    def _notify(msg):
-        asyncio.run_coroutine_threadsafe(
-            update.effective_message.reply_text(msg, parse_mode=ParseMode.MARKDOWN),
-            loop
-        )
-
-    good_assets: list = []
+    good_assets: list  = []
+    campaign_id: str   = ""
+    adset_id: str      = ""
 
     try:
-        # ── Step 1: Prepare media ──────────────────────────────────────────
+        # ── Step 1: Prepare media (timeout: 180s for large video uploads) ─
         await update.effective_message.reply_text("📥 Downloading and uploading creatives…")
-        assets = await loop.run_in_executor(
-            None,
-            lambda: meta.prepare_media_assets(ad_account_id, s["selected_urls"])
+        assets = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: meta.prepare_media_assets(ad_account_id, s["selected_urls"])
+            ),
+            timeout=180,
         )
 
         good_assets = [a for a in assets if "error" not in a]
@@ -1190,53 +1250,80 @@ async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
 
         # ── Step 3: Create campaign ────────────────────────────────────────
         await update.effective_message.reply_text("🏗 Creating campaign…")
-        campaign_id = await loop.run_in_executor(
-            None, lambda: meta.create_campaign(ad_account_id, campaign_name, objective, daily_budget_cents)
+        campaign_id = await asyncio.wait_for(
+            loop.run_in_executor(
+                None, lambda: meta.create_campaign(ad_account_id, campaign_name, objective, daily_budget_minor)
+            ),
+            timeout=30,
         )
 
         # ── Step 4: Create adset ──────────────────────────────────────────
         await update.effective_message.reply_text("📦 Creating ad set…")
-        adset_id = await loop.run_in_executor(
-            None, lambda: meta.create_adset(
-                ad_account_id, campaign_id, campaign_name,
-                country, pixel_id, conversion_ev,
-                start_time_iso=start_time,
+        try:
+            adset_id = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None, lambda: meta.create_adset(
+                        ad_account_id, campaign_id, campaign_name,
+                        country, pixel_id, conversion_ev,
+                        start_time_iso=start_time,
+                    )
+                ),
+                timeout=30,
             )
-        )
+        except Exception:
+            # Rollback: stop the campaign we just created before propagating error
+            if campaign_id:
+                try:
+                    await loop.run_in_executor(None, lambda: meta.force_stop_campaign(campaign_id))
+                    logger.warning(f"[ads_launch] Rolled back campaign {campaign_id} after adset failure")
+                except Exception as _re:
+                    logger.error(f"[ads_launch] Rollback failed for campaign {campaign_id}: {_re}")
+            raise
 
         # ── Step 5 & 6: Create creative(s) and ad(s) ──────────────────────
         texts_list = s["selected_text"] if isinstance(s["selected_text"], list) else [s["selected_text"]]
         heads_list = s["selected_headline"] if isinstance(s["selected_headline"], list) else [s["selected_headline"]]
 
         if ad_type == "FLEXIBLE":
-            # One normal ad per asset — Meta optimises across them automatically
             ad_ids = []
             for i, asset in enumerate(good_assets):
                 ad_name = f"{campaign_name} #{i + 1}"
                 await update.effective_message.reply_text(f"🎨 Creating creative {i + 1}/{len(good_assets)}…")
-                c_id = await loop.run_in_executor(
-                    None, lambda a=asset, n=ad_name: meta.create_creative_single(
-                        ad_account_id, n, page_id, a,
-                        landing_url, texts_list, heads_list, cta
-                    )
+                c_id = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None, lambda a=asset, n=ad_name: meta.create_creative_single(
+                            ad_account_id, n, page_id, a,
+                            landing_url, texts_list, heads_list, cta
+                        )
+                    ),
+                    timeout=30,
                 )
                 await update.effective_message.reply_text(f"📣 Creating ad {i + 1}/{len(good_assets)}…")
-                a_id = await loop.run_in_executor(
-                    None, lambda n=ad_name, c=c_id: meta.create_ad(ad_account_id, adset_id, n, c)
+                a_id = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None, lambda n=ad_name, c=c_id: meta.create_ad(ad_account_id, adset_id, n, c)
+                    ),
+                    timeout=30,
                 )
                 ad_ids.append(a_id)
             ad_id = ", ".join(ad_ids)
         else:
             await update.effective_message.reply_text("🎨 Creating ad creative…")
-            creative_id = await loop.run_in_executor(
-                None, lambda: meta.create_creative_single(
-                    ad_account_id, campaign_name, page_id, good_assets[0],
-                    landing_url, texts_list, heads_list, cta
-                )
+            creative_id = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None, lambda: meta.create_creative_single(
+                        ad_account_id, campaign_name, page_id, good_assets[0],
+                        landing_url, texts_list, heads_list, cta
+                    )
+                ),
+                timeout=30,
             )
             await update.effective_message.reply_text("📣 Creating ad…")
-            ad_id = await loop.run_in_executor(
-                None, lambda: meta.create_ad(ad_account_id, adset_id, campaign_name, creative_id)
+            ad_id = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None, lambda: meta.create_ad(ad_account_id, adset_id, campaign_name, creative_id)
+                ),
+                timeout=30,
             )
 
         # ── Step 7: Move row in sheet ──────────────────────────────────────
@@ -1260,9 +1347,31 @@ async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
             "UPLOADED ASSET IDS":   "",
         }
         src_tab = s.get("source_tab", sheet.TAB_READY)
-        await loop.run_in_executor(None, lambda: sheet.move_product(p, sheet.TAB_RUNNING, extra, source_tab=src_tab))
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: sheet.move_product(p, sheet.TAB_RUNNING, extra, source_tab=src_tab)),
+                timeout=30,
+            )
+        except Exception as sheet_err:
+            # Campaign is live but sheet write failed — log prominently so it can be reconciled
+            logger.error(
+                f"[ads_launch] SHEET WRITE FAILED after successful publish for {sku}! "
+                f"Campaign ID: {campaign_id} | Adset ID: {adset_id} | Ad ID: {ad_id} | Error: {sheet_err}"
+            )
+            await update.effective_message.reply_text(
+                f"⚠️ *Ad is LIVE but sheet update failed!*\n\n"
+                f"*Campaign ID:* `{campaign_id}`\n"
+                f"*Ad Set ID:* `{adset_id}`\n"
+                f"*Ad ID:* `{ad_id}`\n\n"
+                f"Save these IDs manually — the campaign is running but not tracked in your sheet.\n"
+                f"Error: `{str(sheet_err)[:200]}`",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            _clear(uid)
+            return
 
         # ── Step 8: Done ───────────────────────────────────────────────────
+        currency   = cfg.get("currency", "USD")
         sched_note = f" (starts at {start_time})" if start_time else " (live now)"
         await update.effective_message.reply_text(
             f"✅ *Ad launched successfully!{sched_note}*\n\n"
@@ -1271,8 +1380,29 @@ async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
             f"*Ad Set ID:* `{adset_id}`\n"
             f"*Ad ID:* `{ad_id}`\n"
             f"*Ad Type:* `{ad_type}`\n"
+            f"*Daily Budget:* `{daily_budget:,.0f} {currency}`\n"
             f"*Row moved to ADS RUNNING ✅*\n\n"
             f"Use /launch to launch the next product, or /stats to monitor campaigns.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        _clear(uid)
+
+    except asyncio.TimeoutError:
+        err_str = "Publish timed out — Meta API did not respond in time."
+        logger.error(f"[ads_launch] Publish timeout for {sku}. campaign_id={campaign_id or 'not created'}")
+        # Rollback any campaign created
+        if campaign_id:
+            try:
+                await loop.run_in_executor(None, lambda: meta.force_stop_campaign(campaign_id))
+                logger.warning(f"[ads_launch] Rolled back campaign {campaign_id} after timeout")
+            except Exception as _re:
+                logger.error(f"[ads_launch] Rollback failed: {_re}")
+        import json as _json
+        extra_err = {"STATU": "ADS ERROR", "ERROR MESSAGE": err_str, "UPLOADED ASSET IDS": _json.dumps(good_assets) if good_assets else ""}
+        src_tab_err = s.get("source_tab", sheet.TAB_READY)
+        await loop.run_in_executor(None, lambda: sheet.move_product(p, sheet.TAB_ERROR, extra_err, source_tab=src_tab_err))
+        await update.effective_message.reply_text(
+            f"❌ *Publish timed out for {sku}*\n\nMeta API did not respond in time.\nProduct moved to *ADS ERROR* tab.",
             parse_mode=ParseMode.MARKDOWN
         )
         _clear(uid)
@@ -1280,6 +1410,13 @@ async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
     except Exception as e:
         err_str = str(e)
         logger.error(f"[ads_launch] Publish failed for {sku}: {err_str}")
+        # Rollback any campaign created before the failure
+        if campaign_id and not adset_id:
+            try:
+                await loop.run_in_executor(None, lambda: meta.force_stop_campaign(campaign_id))
+                logger.warning(f"[ads_launch] Rolled back orphaned campaign {campaign_id}")
+            except Exception as _re:
+                logger.error(f"[ads_launch] Rollback failed: {_re}")
 
         import json as _json
         extra_err = {
@@ -1441,8 +1578,10 @@ async def _fetch_stats_card(uid: int, sku: str, loop) -> tuple[str, InlineKeyboa
 
 
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _auth(update):
+        return
     uid  = update.effective_user.id
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     _save_monitor_chat_id(update.effective_chat.id)
 
@@ -1482,7 +1621,7 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await _answer(update)
     uid  = update.effective_user.id
     data = update.callback_query.data   # e.g. "stats:stop:PRD-0026"
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     parts = data.split(":", 2)
     if len(parts) < 3:
@@ -1524,10 +1663,10 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         pixel_id      = cfg_data.get("pixel_id", "")
         conversion_ev = cfg_data.get("conversion_event", "Purchase")
         country       = cfg_data.get("country", "GN")
-        budget_usd    = float(cfg_data.get("daily_budget_usd", 5.0))
-        objective     = cfg_data.get("objective", "OUTCOME_SALES")
-        cta           = cfg_data.get("cta", "LEARN_MORE")
-        daily_budget_cents = int(budget_usd * 100)
+        daily_budget       = float(cfg_data.get("daily_budget", cfg_data.get("daily_budget_usd", 5000.0)))
+        objective          = cfg_data.get("objective", "OUTCOME_SALES")
+        cta                = cfg_data.get("cta", "SHOP_NOW")
+        daily_budget_minor = int(daily_budget * 100)
 
         product_name  = row.get("PRODUCT NAME", sku)
         campaign_name = f"{sku} {product_name}".strip()
@@ -1576,7 +1715,7 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
             await msg.edit_text(f"🔄 *Republishing `{sku}`…*\nCreating campaign…", parse_mode=ParseMode.MARKDOWN)
             new_campaign_id = await loop.run_in_executor(
-                None, lambda: meta.create_campaign(ad_account_id, campaign_name, objective, daily_budget_cents)
+                None, lambda: meta.create_campaign(ad_account_id, campaign_name, objective, daily_budget_minor)
             )
 
             await msg.edit_text(f"🔄 *Republishing `{sku}`…*\nCreating ad set…", parse_mode=ParseMode.MARKDOWN)
@@ -1714,16 +1853,18 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     # ── KEEP RUNNING ───────────────────────────────────────────────────────────
     elif action == "keep":
+        from datetime import timedelta
+        override_until = datetime.now(timezone.utc) + timedelta(hours=8)
         await loop.run_in_executor(
             None, lambda: sheet.update_running_row(sku, {
                 "OVERRIDE ACTIVE":  "TRUE",
-                "OVERRIDE UNTIL":   datetime.now(timezone.utc).isoformat(),
+                "OVERRIDE UNTIL":   override_until.isoformat(),
                 "MANUAL DECISION":  "KEEP RUNNING",
             })
         )
         await msg.edit_text(
             f"▶️ *`{sku}`* will keep running.\n"
-            "_Automatic rules will be skipped for the next evaluation cycle._",
+            f"_Automatic rules are paused for 8 hours (until {override_until.strftime('%H:%M UTC')})._",
             parse_mode=ParseMode.MARKDOWN,
         )
 
@@ -1768,6 +1909,8 @@ def _rules_kb() -> list:
 
 
 async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _auth(update):
+        return
     r = rules_mod.load_rules()
     await _reply(update, _rules_text(r), _rules_kb())
 

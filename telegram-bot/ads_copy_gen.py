@@ -130,7 +130,9 @@ HEADLINES:
         return _parse_copy_response(raw, n_texts, n_headlines, product_name, price, language)
     except Exception as e:
         logger.error(f"[ads_copy_gen] AI call failed: {e}")
-        return _fallback_copy(product_name, price, language, n_texts, n_headlines)
+        result = _fallback_copy(product_name, price, language, n_texts, n_headlines)
+        result["is_fallback"] = True
+        return result
 
 
 def _parse_copy_response(raw: str, n_texts: int, n_headlines: int, product_name: str, price: str, language: str) -> dict:

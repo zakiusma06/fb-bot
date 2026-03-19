@@ -323,7 +323,11 @@ def move_running_product(sku: str, target_tab: str, extra_fields: dict | None = 
 
 
 def update_running_row(sku: str, fields: dict) -> bool:
-    """Update specific fields on a row in ADS RUNNING."""
+    """
+    Update specific fields on a row in ADS RUNNING.
+    Uses a single batch_update call instead of one update_cell per field
+    to avoid hitting Google Sheets API rate limits (60 writes/min).
+    """
     try:
         client = _get_client()
         ss = _open_sheet(client)
@@ -335,10 +339,14 @@ def update_running_row(sku: str, fields: dict) -> bool:
         for i, row in enumerate(data[1:], start=2):
             d = _row_to_dict(header, row)
             if d.get("SKU") == sku:
+                updates = []
                 for field, value in fields.items():
                     if field in header:
                         col_idx = header.index(field) + 1
-                        ws.update_cell(i, col_idx, str(value))
+                        cell    = gspread.utils.rowcol_to_a1(i, col_idx)
+                        updates.append({"range": cell, "values": [[str(value)]]})
+                if updates:
+                    _retry(lambda u=updates: ws.batch_update(u, value_input_option="RAW"))
                 return True
         return False
     except Exception as e:

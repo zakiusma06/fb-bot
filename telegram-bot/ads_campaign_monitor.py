@@ -116,7 +116,7 @@ async def run_monitor(bot=None, chat_id: int | None = None):
 
 
 async def _evaluate_all(sheet, meta, ads_rules_mod, bot, chat_id):
-    loop  = asyncio.get_event_loop()
+    loop  = asyncio.get_running_loop()
     rules = ads_rules_mod.load_rules()
 
     try:
@@ -133,17 +133,35 @@ async def _evaluate_all(sheet, meta, ads_rules_mod, bot, chat_id):
         if not campaign_id:
             continue
 
-        # KEEP RUNNING override: skip this cycle then clear the flag
+        # KEEP RUNNING override: skip until OVERRIDE_UNTIL timestamp, then clear
         if str(row.get("OVERRIDE ACTIVE", "")).strip().upper() == "TRUE":
-            logger.info(f"[monitor] {sku}: KEEP RUNNING override — skipping and clearing flag")
-            await loop.run_in_executor(
-                None,
-                lambda s=sku: sheet.update_running_row(s, {
-                    "OVERRIDE ACTIVE": "",
-                    "OVERRIDE UNTIL":  "",
-                })
-            )
-            continue
+            override_until_str = str(row.get("OVERRIDE UNTIL", "")).strip()
+            still_active = False
+            if override_until_str:
+                try:
+                    ts = override_until_str.replace("Z", "+00:00")
+                    override_until = datetime.fromisoformat(ts)
+                    if datetime.now(timezone.utc) < override_until:
+                        still_active = True
+                        remaining_h = (override_until - datetime.now(timezone.utc)).total_seconds() / 3600
+                        logger.info(
+                            f"[monitor] {sku}: KEEP RUNNING override active — "
+                            f"{remaining_h:.1f}h remaining, skipping"
+                        )
+                except Exception:
+                    pass  # bad timestamp → treat as expired
+
+            if not still_active:
+                logger.info(f"[monitor] {sku}: KEEP RUNNING override expired — clearing flag and evaluating")
+                await loop.run_in_executor(
+                    None,
+                    lambda s=sku: sheet.update_running_row(s, {
+                        "OVERRIDE ACTIVE": "",
+                        "OVERRIDE UNTIL":  "",
+                    })
+                )
+            else:
+                continue
 
         try:
             insights = await loop.run_in_executor(
