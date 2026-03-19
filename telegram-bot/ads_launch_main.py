@@ -9,7 +9,10 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from dotenv import load_dotenv
-load_dotenv()
+
+# Try secrets.env first (VPS convention), fall back to .env
+_dir = os.path.dirname(__file__)
+load_dotenv(os.path.join(_dir, "secrets.env")) or load_dotenv(os.path.join(_dir, ".env"))
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
