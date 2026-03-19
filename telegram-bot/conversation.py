@@ -13,11 +13,14 @@ from telegram import (
     Update,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
 )
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     CommandHandler,
+    CallbackQueryHandler,
     MessageHandler,
     filters,
 )
@@ -160,46 +163,87 @@ async def ask_keyword_suggestions(update: Update, context: ContextTypes.DEFAULT_
 
     top = stats[:10]
     context.user_data["ai_keywords"] = [s["keyword"] for s in top]
+    context.user_data["ai_keyword_pcts"] = [round(s["approval_rate"] * 100) for s in top]
+    context.user_data["kw_selected"] = set()
 
-    lines = []
-    for i, s in enumerate(top, 1):
-        pct = round(s["approval_rate"] * 100)
-        lines.append(f"{i}. {s['keyword']} ({pct}% approval rate)")
-
-    keyword_list = "\n".join(lines)
-    msg_text = (
-        f"*Top Keyword Suggestions*\n\n{keyword_list}\n\n"
-        "Reply with the numbers you want (e.g. `1,3,5`) or type your own keywords:"
-    )
+    keyboard = _build_kw_keyboard(top, set())
+    msg_text = "*Top Keyword Suggestions*\nTap to select, then tap ✅ Confirm:"
     try:
-        await thinking_msg.edit_text(msg_text, parse_mode="Markdown")
+        await thinking_msg.edit_text(
+            msg_text, parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
     except Exception:
-        await update.message.reply_text(msg_text, parse_mode="Markdown")
+        await update.message.reply_text(
+            msg_text, parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
     return ASK_KEYWORD_SELECTION
 
 
-# ── Step 3b: AI keyword selection ─────────────────────────────────────────
+def _build_kw_keyboard(stats_list: list, selected: set) -> list:
+    """Build inline keyboard rows for keyword selection."""
+    rows = []
+    for i, s in enumerate(stats_list):
+        pct = s["approval_rate"] if isinstance(s["approval_rate"], int) else round(s["approval_rate"] * 100)
+        check = "✅" if i in selected else "☐"
+        label = f"{check} {s['keyword']} ({pct}%)"
+        rows.append([InlineKeyboardButton(label, callback_data=f"kw_toggle:{i}")])
+    count = len(selected)
+    confirm_label = f"✅ Confirm ({count} selected)" if count else "✅ Confirm"
+    rows.append([InlineKeyboardButton(confirm_label, callback_data="kw_confirm")])
+    return rows
+
+
+# ── Step 3b: inline keyword toggle ────────────────────────────────────────
+async def cb_keyword_toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    idx = int(query.data.split(":")[1])
+    selected: set = ctx.user_data.get("kw_selected", set())
+    if idx in selected:
+        selected.discard(idx)
+    else:
+        selected.add(idx)
+    ctx.user_data["kw_selected"] = selected
+
+    kws = ctx.user_data.get("ai_keywords", [])
+    pcts = ctx.user_data.get("ai_keyword_pcts", [])
+    stats_list = [{"keyword": kw, "approval_rate": pct} for kw, pct in zip(kws, pcts)]
+    keyboard = _build_kw_keyboard(stats_list, selected)
+    await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+    return ASK_KEYWORD_SELECTION
+
+
+# ── Step 3b: inline keyword confirm ───────────────────────────────────────
+async def cb_keyword_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    selected: set = ctx.user_data.get("kw_selected", set())
+    if not selected:
+        await query.answer("Select at least one keyword first!", show_alert=True)
+        return ASK_KEYWORD_SELECTION
+    await query.answer()
+    ai_keywords = ctx.user_data.get("ai_keywords", [])
+    chosen = [ai_keywords[i] for i in sorted(selected)]
+    ctx.user_data["keywords"] = chosen
+    try:
+        await query.edit_message_text(f"✅ Keywords selected: {', '.join(chosen)}")
+    except Exception:
+        pass
+    return await _proceed_to_countries(update, ctx)
+
+
+# ── Step 3b: manual text fallback (user types their own keywords) ─────────
 async def ask_keyword_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
-    ai_keywords = context.user_data.get("ai_keywords", [])
     normalized = text.replace(";", ",").replace("\n", ",")
-    parts = [p.strip() for p in normalized.split(",")]
-    chosen_by_number, chosen_custom = [], []
-    for part in parts:
-        if part.isdigit():
-            idx = int(part) - 1
-            if 0 <= idx < len(ai_keywords):
-                chosen_by_number.append(ai_keywords[idx])
-        elif part:
-            chosen_custom.append(part)
-    selected = chosen_by_number + chosen_custom
-    if not selected:
+    keywords = [k.strip() for k in normalized.split(",") if k.strip()]
+    if not keywords:
         await update.message.reply_text(
-            "No keywords selected. Reply with numbers like `1,3,5` or type your own.",
-            parse_mode="Markdown",
+            "No keywords found. Type one or more keywords separated by commas.",
         )
         return ASK_KEYWORD_SELECTION
-    context.user_data["keywords"] = selected
+    context.user_data["keywords"] = keywords
     return await _proceed_to_countries(update, context)
 
 
@@ -891,7 +935,11 @@ def build_conversation_handler() -> ConversationHandler:
         states={
             ASK_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_quantity)],
             ASK_KEYWORD_MODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_keyword_mode)],
-            ASK_KEYWORD_SELECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_keyword_selection)],
+            ASK_KEYWORD_SELECTION: [
+                CallbackQueryHandler(cb_keyword_toggle,  pattern="^kw_toggle:"),
+                CallbackQueryHandler(cb_keyword_confirm, pattern="^kw_confirm$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_keyword_selection),
+            ],
             ASK_MANUAL_KEYWORDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_manual_keywords)],
             ASK_COUNTRIES: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_countries)],
             ASK_MEDIA_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_media_type)],
