@@ -185,7 +185,8 @@ def get_next_sku_number() -> int:
 def read_existing_rows() -> list[dict]:
     """
     Read all rows from every status tab (for deduplication checks).
-    Returns a flat list of row dicts.
+    Returns a flat list of row dicts, each with an extra '_tab' key
+    indicating which tab the row came from (used for dedup logging).
     """
     results: list[dict] = []
     try:
@@ -194,9 +195,14 @@ def read_existing_rows() -> list[dict]:
         for tab_name in STATUS_TABS:
             try:
                 ws = spreadsheet.worksheet(tab_name)
-                results.extend(ws.get_all_records())
-            except Exception:
-                pass
+                tab_rows = ws.get_all_records()
+                for row in tab_rows:
+                    row["_tab"] = tab_name
+                results.extend(tab_rows)
+                logger.debug(f"[sheet] read_existing_rows: {len(tab_rows)} rows from '{tab_name}'")
+            except Exception as e:
+                logger.debug(f"[sheet] read_existing_rows: could not read '{tab_name}': {e}")
+        logger.info(f"[sheet] read_existing_rows: {len(results)} total rows loaded for dedup")
         return results
     except gspread.exceptions.APIError as e:
         _handle_api_error(e)

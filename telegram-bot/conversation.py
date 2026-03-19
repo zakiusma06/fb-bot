@@ -407,7 +407,8 @@ async def _do_extraction(
     MAX_ROUNDS = 5
     valid_clusters: list = []            # accumulates all accepted clusters (for dedup + count)
     seen_ad_ids: set[str] = set()        # global ad dedup key
-    skipped_duplicates: list[str] = []   # names skipped as sheet dupes
+    skipped_duplicates: list[str] = []   # names skipped as hard sheet dupes
+    possible_duplicates: list[str] = []  # names flagged as possible dupes (still saved)
     sku_offset = 0                       # how many SKUs already assigned
     ads_scanned = 0                      # total raw ads collected (for final summary)
     total_saved = 0                      # total rows written across all rounds
@@ -596,18 +597,42 @@ async def _do_extraction(
             if no_url:
                 await progress(f"  ⏭ Skipped *{len(no_url)}* cluster(s) — no product URL")
 
+            # ── Pre-dedup debug preview (top clusters before dedup) ───────
+            if round_clusters:
+                preview_lines = []
+                for _c in round_clusters[:10]:
+                    _url = _c.product_urls[0][:60] if _c.product_urls else "NO URL"
+                    preview_lines.append(f"  {_c.sku}: {_c.canonical_name[:35] or '(no name)'} | {_url}")
+                logger.info(
+                    f"[conv] '{keyword}': {len(round_clusters)} clusters before dedup:\n"
+                    + "\n".join(preview_lines)
+                )
+
             # ── Dedup against existing sheet rows ─────────────────────────
             round_valid: list = []
             dup_count_this_round = 0
             for cluster in round_clusters:
-                is_dup, reason = is_cluster_duplicate(cluster, existing_rows)
+                is_dup, hard_reason, possible_reason = is_cluster_duplicate(cluster, existing_rows)
                 if is_dup:
-                    skipped_duplicates.append(f"• *{cluster.canonical_name[:45]}* — {reason}")
-                    logger.info(f"[conv] Duplicate skipped: {cluster.canonical_name[:50]} ({reason})")
+                    skipped_duplicates.append(
+                        f"• *{cluster.canonical_name[:45] or cluster.sku}* — {hard_reason}"
+                    )
+                    logger.info(
+                        f"[conv] HARD DUPLICATE skipped: "
+                        f"{cluster.canonical_name[:50] or cluster.sku} ({hard_reason})"
+                    )
                     dup_count_this_round += 1
                 else:
                     round_valid.append(cluster)
                     sku_offset += 1
+                    if possible_reason:
+                        possible_duplicates.append(
+                            f"• *{cluster.canonical_name[:45] or cluster.sku}* — {possible_reason}"
+                        )
+                        logger.info(
+                            f"[conv] POSSIBLE DUPLICATE saved anyway: "
+                            f"{cluster.canonical_name[:50] or cluster.sku} ({possible_reason})"
+                        )
 
             total_after_kw = len(valid_clusters) + len(round_valid)
             if total_after_kw >= quantity:
@@ -729,9 +754,16 @@ async def _do_extraction(
     dedup_msg = ""
     if skipped_duplicates:
         dedup_msg = (
-            f"\n  ⏭ Skipped *{len(skipped_duplicates)}* duplicate(s) already in your sheet:\n"
+            f"\n  ⏭ Skipped *{len(skipped_duplicates)}* exact duplicate(s) already in your sheet:\n"
             + "\n".join(skipped_duplicates[:5])
             + ("\n  …and more" if len(skipped_duplicates) > 5 else "")
+        )
+    if possible_duplicates:
+        dedup_msg += (
+            f"\n  ⚠️ *{len(possible_duplicates)}* possible duplicate(s) "
+            f"(saved anyway — verify manually):\n"
+            + "\n".join(possible_duplicates[:3])
+            + ("\n  …and more" if len(possible_duplicates) > 3 else "")
         )
 
     shortfall_msg = ""
@@ -762,10 +794,23 @@ async def _do_extraction(
                 "⚠️ No products found — Meta returned no new ads for these keywords/countries.\n"
                 "Try adding more keywords or different countries."
             )
-        else:
+        elif skipped_duplicates:
+            dup_detail = "\n".join(skipped_duplicates[:5])
+            if len(skipped_duplicates) > 5:
+                dup_detail += f"\n  …and {len(skipped_duplicates) - 5} more"
             await progress(
-                "⚠️ All discovered products are already in your sheet — no new clusters to add.\n"
-                "Try different keywords to find new products."
+                f"⚠️ All *{len(skipped_duplicates)}* discovered cluster(s) were exact "
+                f"URL matches already in your sheet — nothing new to add.\n\n"
+                f"*Skipped:*\n{dup_detail}\n\n"
+                f"Try different keywords or countries to find new products."
+            )
+        else:
+            # Ads were found and clustered but filtered out before reaching dedup
+            await progress(
+                "⚠️ No new product clusters passed all filters — nothing saved.\n"
+                "Possible reasons: no product URLs found, all ads were collection/homepage "
+                "pages, or all products were digital.\n"
+                "Try different keywords or relax your filters."
             )
         return
 
