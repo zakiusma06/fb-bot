@@ -1,0 +1,137 @@
+Fix the WEIGHT extraction logic on the 1688 sourcing page.
+
+Current problem:
+The scraper is extracting wrong values because it reads random numbers or generic ".field-value" cells without understanding the table structure.
+
+Important:
+Do NOT use loose fallback logic like:
+- first number in page
+- first .field-value
+- first number followed by g
+- first random value in Packing
+
+That causes false positives such as 169g.
+
+--------------------------------------------------
+CORRECT EXTRACTION RULE
+--------------------------------------------------
+
+The scraper must extract weight from the PACKING section table structure.
+
+Example HTML structure:
+
+<div id="productPackInfo">
+  ...
+  <table>
+    <thead>
+      <tr>
+        <th class="field-value">重量(g)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="field-value">200</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+In this example:
+
+- header = 重量(g)
+- value = 200
+
+So the correct extracted result is:
+
+WEIGHT GRAM = 200
+
+--------------------------------------------------
+IMPLEMENTATION LOGIC
+--------------------------------------------------
+
+After the bot opens the final 1688 product page:
+
+1. Locate the packing section:
+
+#productPackInfo
+
+2. Inside this section, look for table structures.
+
+3. Read the header cells inside:
+
+thead th
+
+4. If a header cell contains:
+
+重量(g)
+
+then read the corresponding value from:
+
+tbody td
+
+5. Extract the numeric value and save it as:
+
+WEIGHT GRAM
+
+--------------------------------------------------
+IMPORTANT STRUCTURE NOTE
+--------------------------------------------------
+
+Do NOT assume the label and value are in the same row.
+
+On this page layout:
+- the label is in the TABLE HEADER (thead th)
+- the value is in the TABLE BODY (tbody td)
+
+So the scraper must support this pattern:
+
+thead th = weight label
+tbody td = weight value
+
+--------------------------------------------------
+STRICT RULES
+--------------------------------------------------
+
+Only accept weight when it is explicitly tied to one of these labels:
+
+重量(g)
+净重
+毛重
+商品重量
+包装重量
+
+If the scraper does not find one of these labels in a trustworthy table/attribute structure:
+leave WEIGHT GRAM empty
+
+Do NOT guess.
+Do NOT use unrelated numeric values.
+
+--------------------------------------------------
+TARGET SELECTOR STRATEGY
+--------------------------------------------------
+
+Primary target:
+#productPackInfo table
+
+Preferred extraction flow:
+
+- find #productPackInfo
+- find table
+- inspect thead th text
+- if header text matches 重量(g), extract the first tbody td value
+- normalize to integer grams
+
+--------------------------------------------------
+FAILSAFE
+--------------------------------------------------
+
+If #productPackInfo exists but the expected labeled table is not found:
+leave WEIGHT GRAM empty
+
+It is better to return empty than a wrong value.
+
+--------------------------------------------------
+GOAL
+--------------------------------------------------
+
+The scraper must correctly extract weight only from the labeled packing table structure, not from random page values.

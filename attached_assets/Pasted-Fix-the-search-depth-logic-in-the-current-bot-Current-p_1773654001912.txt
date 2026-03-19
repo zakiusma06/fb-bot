@@ -1,0 +1,65 @@
+Fix the search depth logic in the current bot.
+
+Current problem:
+If the user asks for 5 products, the bot does not scan enough ads at the beginning.
+Then because many products are skipped, it ends too early.
+
+New required behavior:
+
+If the user asks for N valid products, the bot must initially scan a MUCH LARGER number of ads than N, because many ads/products will be skipped.
+
+Examples:
+- if user asks for 5 products, scan far more than 5 ads initially
+- if user asks for 10 products, scan much more than for 5
+- if user asks for 20 products, scan much more than for 10
+
+The initial search depth must scale with the requested number of products.
+
+Important:
+The bot must not assume that requested_products == number_of_ads_to_scan.
+
+Instead:
+requested_products = final valid products needed
+ads_to_scan_initial = much larger pool
+
+Required logic:
+
+1. When the extraction starts, compute a large initial scan size based on requested product count.
+2. Search and scroll enough to collect a large pool of candidate ads.
+3. Process those ads.
+4. Skip invalid products as usual.
+5. If valid products found is still below requested count:
+   - continue the SAME search
+   - continue loading / scrolling / processing more ads from the same search results
+   - do NOT start a brand new search from zero
+6. Keep continuing the same search until:
+   - valid_products_found >= requested_products
+   OR
+   - there are truly no more results available in that search
+
+Important:
+If the user asks for 5, the bot must continue in the same search until it finds 5 valid products or reaches the real end of available ads.
+Same logic for 10, 20, etc.
+
+Do not do this:
+- do not restart a fresh search too early
+- do not stop after scanning only a small pool
+- do not equate requested count with initial scan count
+
+Implement dynamic scaling for initial scan size.
+Example idea:
+larger requested count => much larger initial scan pool
+
+But the key rule is:
+The bot must scan a large enough number from the start, and if not enough valid products are found, it must continue the same search instead of launching a new one.
+
+Add logs like:
+- requested products: X
+- initial ads scan target: Y
+- continuing same search for more ads...
+- no more ads available in current search
+- valid products found: X / requested
+
+Do not change Telegram flow.
+Do not change Google Sheet format.
+Only fix the search depth and continuation behavior.

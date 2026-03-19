@@ -1,0 +1,716 @@
+You are building a production-ready Facebook Ads Launch & Testing Agent.
+
+I want this system to act like a normal AI operator that I can chat with, but behind the scenes it must execute a strict workflow using my Google Sheets data, Meta Ads configuration, and editable automation rules.
+
+========================
+1. MAIN PURPOSE
+========================
+
+This bot must:
+
+1. Read products from a Google Sheet page called:
+- READY TO ADS
+
+2. Show me products one by one and let me:
+- launch the product
+- skip to next product
+- stop the session
+
+3. For the selected product, show me:
+- SKU
+- PRODUCT NAME
+- URL PRODUCT
+- URL LANDING PAGE
+- PRICE
+- COMPARE AT PRICE
+- all available ADS LIBRARY MEDIA URL fields
+
+4. Let me choose:
+- which creatives to use
+- how many primary texts to generate
+- how many headlines to generate
+
+5. Generate ad copy with AI and let me choose the final options
+
+6. Load already-configured Meta defaults from bot settings:
+- ad account
+- page
+- country
+- daily budget
+- campaign objective
+- pixel
+- conversion event
+- timezone
+
+7. Show those defaults to me and let me:
+- approve them
+- edit them
+
+8. Ask me launch timing:
+- Publish now
+- Publish today at 11:59 PM in the ad account timezone
+
+9. Show a final campaign summary
+
+10. After my approval, create and publish the ad in Meta
+
+11. Move rows between sheets depending on status:
+- READY TO ADS
+- ADS RUNNING
+- WINNER
+- LOSER
+- ADS ERROR
+
+12. Continuously sync stats from Meta and apply:
+- global rules
+- day 1 rules
+- day 2 rules
+
+13. Give me manual control from stats:
+- stop as winner
+- stop as loser
+- stop with custom note
+- keep running
+- temporary override auto rules
+
+This system is only for testing products.
+If a product becomes a winner, the bot must STOP the campaign and move it to WINNER.
+I do not want winner products to continue running automatically because I will relaunch later after stock is available.
+
+========================
+2. SHEET STRUCTURE
+========================
+
+Source sheet:
+- READY TO ADS
+
+Main working/result sheets:
+- ADS RUNNING
+- WINNER
+- LOSER
+- ADS ERROR
+
+The READY TO ADS sheet contains these fields:
+- SKU
+- KEYWORD
+- URL PRODUCT
+- ADS LIBRARY MEDIA URL
+- ADS LIBRARY MEDIA URL 2
+- ADS LIBRARY MEDIA URL 3
+- ADS LIBRARY MEDIA URL 4
+- ADS LIBRARY MEDIA URL 5
+- PRICE
+- COMPARE AT PRICE
+- URL LANDING PAGE
+- PRODUCT NAME
+- STATU
+- NOTE
+- SOURCING PRICE USD
+- SOURCING URL
+- WEIGHT GRAM
+- HAS VARIANTS
+
+You must also add and maintain these operational fields where needed:
+- CAMPAIGN NAME
+- ADSET NAME
+- AD NAME
+- META CAMPAIGN ID
+- META ADSET ID
+- META AD ID
+- AD TYPE
+- SELECTED CREATIVES
+- SELECTED PRIMARY TEXT
+- SELECTED HEADLINE
+- PUBLISH MODE
+- SCHEDULED TIME
+- PUBLISHED AT
+- EFFECTIVE START TIME
+- LAST METRICS SYNC
+- RESULTS
+- SPEND
+- 1 DAY COST PER RZLT
+- 2 DAY COST PER RZLT
+- TOTAL COST PER RZLT
+- RULE TRIGGERED
+- ERROR MESSAGE
+- MANUAL DECISION
+- MANUAL NOTE
+- OVERRIDE ACTIVE
+- OVERRIDE UNTIL
+- STOPPED AT
+- STOP REASON
+
+Keep data safe.
+When moving a row:
+1. Copy row to destination sheet
+2. Verify success
+3. Update/remove original row from source sheet
+
+========================
+3. NAMING LOGIC
+========================
+
+Campaign name = Ad Set name = Ad name
+
+Naming format:
+- SKU + " " + PRODUCT NAME
+
+Example:
+- SKU123 Portable Blender
+
+No extra naming logic unless I ask later.
+
+========================
+4. CREATIVE LOGIC
+========================
+
+If I choose only 1 creative:
+- create a normal single creative ad
+
+If I choose 2 or more creatives:
+- create a flexible ad
+
+Rules:
+- 1 creative => NORMAL
+- 2+ creatives => FLEXIBLE
+
+Store AD TYPE accordingly.
+
+========================
+5. META DEFAULTS / SETTINGS
+========================
+
+The bot must have a configuration area where these are manually set up once:
+- available ad accounts
+- available pages
+- available Instagram accounts if used
+- available pixels
+- available conversion events per pixel
+- timezone per ad account
+- currencies
+- default country
+- default daily budget
+- default objective
+- default CTA if used
+
+During launch, the bot must load these saved defaults and show them to me.
+
+Example:
+Found saved setup:
+- Ad account: ...
+- Page: ...
+- Country: ...
+- Daily budget: ...
+- Objective: ...
+- Pixel: ...
+- Conversion event: ...
+- Timezone: ...
+
+Then ask:
+- Approve
+- Edit
+
+Important dependency logic:
+- if ad account changes, refresh valid pages/pixels/timezone
+- if pixel changes, refresh valid conversion events
+- timezone should follow ad account timezone automatically
+
+========================
+6. PRODUCT SELECTION FLOW
+========================
+
+When I run launch mode, the bot must read only launchable rows from READY TO ADS.
+
+Show products one by one with:
+- SKU
+- PRODUCT NAME
+- URL PRODUCT
+- URL LANDING PAGE
+- PRICE
+- COMPARE AT PRICE
+- KEYWORD
+- NOTE
+- all creative URLs found
+
+Then always give me these actions:
+- Launch this product
+- Skip to next product
+- Preview again
+- Stop
+
+Skipping must move directly to the next eligible product.
+
+========================
+7. COPY GENERATION FLOW
+========================
+
+After I choose creatives, ask:
+- language
+- tone/style/angle if needed
+- number of primary texts to generate
+- number of headlines to generate
+
+Then generate options.
+
+Display them clearly:
+PRIMARY TEXT OPTIONS
+1. ...
+2. ...
+3. ...
+
+HEADLINE OPTIONS
+1. ...
+2. ...
+3. ...
+
+Then let me choose:
+- one primary text and one headline for NORMAL ads
+- one or multiple approved options for FLEXIBLE ads if needed
+
+Do not publish until I approve the selected text and headline.
+
+========================
+8. MEDIA HANDLING LOGIC
+========================
+
+My sheet contains Ads Library media URLs.
+
+The system must attempt this workflow:
+
+1. Read selected ADS LIBRARY MEDIA URL values
+2. Try to download each selected media asset
+3. Validate whether it is usable media
+4. Store temporarily
+5. Upload it into my Meta ad account
+6. Use the uploaded asset for ad creation
+
+Important:
+Ads Library URLs are not guaranteed to be reusable raw assets.
+Some may fail, expire, or be non-direct links.
+
+So implement robust fallback logic:
+- if selected media downloads successfully => continue
+- if selected media fails => show me the failure and let me choose another creative if possible
+- if no usable creative remains => mark product as ADS ERROR and move it to ADS ERROR
+
+If image:
+- upload as image asset
+If video:
+- upload as video asset
+
+Do not assume Ads Library links can be used directly in the final ad.
+Prefer re-download then re-upload into my own ad account.
+
+========================
+9. SCHEDULING LOGIC
+========================
+
+There is no draft mode.
+
+Create = Publish
+
+The bot must only support these 2 publish modes:
+- NOW
+- TODAY_2359
+
+Meaning:
+1. Publish now
+2. Publish today at 11:59 PM in the ad account timezone
+
+This 11:59 PM option is used so spend starts the next day.
+
+Use ad account timezone as source of truth.
+
+========================
+10. FINAL SUMMARY BEFORE PUBLISH
+========================
+
+Before creating the ad, show me a full summary:
+
+- Campaign name
+- Ad Set name
+- Ad name
+- Product name
+- SKU
+- Product URL
+- Landing page URL
+- Selected creatives
+- Ad type (NORMAL or FLEXIBLE)
+- Selected primary text
+- Selected headline
+- Ad account
+- Page
+- Country
+- Daily budget
+- Objective
+- Pixel
+- Conversion event
+- Timezone
+- Publish mode
+- Scheduled time if applicable
+
+Then give these actions:
+- Approve and publish
+- Edit creatives
+- Edit copy
+- Edit settings
+- Cancel
+
+Never publish without this final approval.
+
+========================
+11. STATUS / SHEET MOVEMENT RULES
+========================
+
+If publish succeeds:
+- set STATU = ADS RUNNING
+- move row from READY TO ADS to ADS RUNNING
+
+If publish fails:
+- set STATU = ADS ERROR
+- store error message
+- move row from READY TO ADS to ADS ERROR
+
+If running ad becomes loser:
+- pause campaign
+- set STATU = LOSER
+- move row from ADS RUNNING to LOSER
+
+If running ad becomes winner:
+- pause campaign
+- set STATU = WINNER
+- move row from ADS RUNNING to WINNER
+
+Important:
+For my business, a winner must be STOPPED after passing test rules.
+Do not keep winner ads running automatically.
+
+========================
+12. CONTINUOUS SYNC LOGIC
+========================
+
+This bot must continuously monitor all campaigns in ADS RUNNING.
+
+Do not wait until end of day for global rules.
+
+Implement frequent polling / sync of Meta stats.
+Recommended architecture:
+- sync every few minutes
+- fetch fresh spend/results/performance
+- update sheet fields
+- evaluate rules immediately after sync
+
+This is not literal realtime streaming.
+It is frequent automatic polling + automatic actions.
+
+Always keep ADS RUNNING synchronized with current Meta data.
+
+========================
+13. COST PER RESULT FIELDS
+========================
+
+Maintain these fields on:
+- ADS RUNNING
+- WINNER
+- LOSER
+
+Fields:
+- 1 DAY COST PER RZLT
+- 2 DAY COST PER RZLT
+- TOTAL COST PER RZLT
+
+Definitions:
+1 DAY COST PER RZLT
+- performance for first 24h from effective start time
+
+2 DAY COST PER RZLT
+- performance for second 24h window, from 24h to 48h
+
+TOTAL COST PER RZLT
+- total performance from launch until current/stop time
+
+Formula:
+- if results > 0 => spend / results
+- if results = 0 => mark as NO RESULTS or equivalent safe value
+
+Use the selected conversion event as the definition of “result”.
+
+Also track:
+- campaign age in hours
+- first 24h checkpoint reached or not
+- 48h checkpoint reached or not
+
+========================
+14. RULE ENGINE
+========================
+
+The bot must support editable rules in 3 groups:
+- global rules
+- day 1 rules
+- day 2 rules
+
+These rules must be editable by command.
+Do not hardcode them in a way that cannot be changed later.
+
+Store them in a config structure such as JSON or database.
+
+========================
+15. DEFAULT RULES TO IMPLEMENT NOW
+========================
+
+Implement these initial rules:
+
+GLOBAL RULES
+1. If spend >= 3 USD and results = 0
+- pause campaign immediately
+- move to LOSER
+
+This global rule must be checked continuously.
+Do not wait until the day ends.
+
+DAY 1 RULES (after 24h)
+1. If 1 DAY COST PER RZLT > 2 USD
+- pause campaign
+- move to LOSER
+
+2. If 1 DAY COST PER RZLT < 0.5 USD
+- pause campaign
+- move to WINNER
+
+DAY 2 RULES (after 48h)
+1. If second-day spend >= 3 USD and second-day results = 0
+- pause campaign
+- move to LOSER
+
+2. If 2 DAY COST PER RZLT > 2 USD
+- pause campaign
+- move to LOSER
+
+3. If 2 DAY COST PER RZLT <= 2 USD
+- pause campaign
+- move to WINNER
+
+Remember:
+WINNER = passed test, then STOP
+LOSER = failed test, then STOP
+
+========================
+16. MANUAL CONTROL IN STATS
+========================
+
+In statistics mode, whenever the bot shows stats or cost per result, it must also give manual actions.
+
+This system has both:
+- auto rules
+- manual optional control
+
+When showing a running campaign, display:
+- campaign name
+- spend
+- results
+- total CPR
+- 1 day CPR if available
+- 2 day CPR if available
+- age in hours
+- status
+- rule risk / triggered conditions
+- override status
+
+Then give actions:
+- Stop as Winner
+- Stop as Loser
+- Stop with Custom Note
+- Keep Running
+- Override Auto Rules Temporarily
+- Next Campaign
+
+If I manually stop a campaign, I must be able to write a note, such as:
+- winner
+- loser
+- any custom reason
+
+If I choose manual stop:
+1. ask outcome:
+- WINNER
+- LOSER
+- CUSTOM NOTE ONLY
+
+2. ask note text
+
+3. pause campaign
+
+4. store:
+- MANUAL DECISION
+- MANUAL NOTE
+- STOPPED AT
+- STOP REASON
+
+5. move row if needed:
+- to WINNER
+- to LOSER
+
+========================
+17. MANUAL OVERRIDE LOGIC
+========================
+
+Support temporary manual override.
+
+If I choose “keep running with override”, allow:
+- 6 hours
+- 12 hours
+- 24 hours
+- custom duration
+
+When override is active:
+- auto kill rules for that campaign are temporarily ignored until OVERRIDE UNTIL
+
+Store:
+- OVERRIDE ACTIVE
+- OVERRIDE UNTIL
+
+Rule priority:
+1. Manual stop
+2. Manual override
+3. Auto rules
+
+========================
+18. STATISTICS COMMANDS
+========================
+
+Implement commands such as:
+- show stats
+- show running stats
+- show stats for SKU123
+- show winners
+- show losers
+- refresh metrics
+- stop SKU123
+- keep SKU123 running
+- override SKU123 for 12h
+- move SKU123 to winner
+- move SKU123 to loser
+
+Support at least these views:
+1. Per campaign
+2. All running campaigns
+3. Per SKU/product
+
+Stats should include:
+- spend
+- impressions
+- CPM
+- CTR
+- link clicks
+- CPC
+- add to cart
+- initiated checkout
+- purchases
+- cost per purchase
+- ROAS
+
+But for rule evaluation, use the selected conversion event as the core result metric.
+
+========================
+19. SAFETY / VALIDATION CHECKS
+========================
+
+Before publish, validate:
+- product URL exists
+- landing page URL exists if selected
+- at least 1 creative selected
+- selected creative successfully prepared
+- budget valid
+- ad account valid
+- page valid
+- pixel valid
+- conversion event valid
+- naming built correctly
+- primary text selected
+- headline selected
+
+If any critical validation fails:
+- do not publish
+- explain what failed
+- allow fix/edit
+- if unrecoverable, move to ADS ERROR
+
+========================
+20. ADS ERROR BEHAVIOR
+========================
+
+If launch fails, or media prep completely fails, or required ad creation fails:
+- STATU = ADS ERROR
+- write ERROR MESSAGE
+- move row to ADS ERROR
+
+ADS ERROR must be its own sheet dedicated to failures.
+
+========================
+21. UX / CONVERSATION STYLE
+========================
+
+This bot must behave like a practical AI operator.
+
+It should:
+- guide me clearly
+- not ask unnecessary repeated questions
+- always show current defaults before asking me to re-enter them
+- let me approve or edit
+- support skip to next product at any time during product browsing
+- be structured and operational, not vague
+
+Prefer button-like choices in chat if possible.
+
+========================
+22. IMPLEMENTATION PRIORITY
+========================
+
+Build this in phases, but keep architecture ready for full production.
+
+Phase 1:
+- sheet read/write
+- product browsing
+- creative selection
+- AI copy generation
+- final summary
+- publish now / publish today at 11:59 PM
+- move to ADS RUNNING or ADS ERROR
+
+Phase 2:
+- continuous sync from Meta
+- statistics mode
+- manual stop / manual notes
+- movement to WINNER / LOSER
+
+Phase 3:
+- editable rule engine
+- overrides
+- robust media retry handling
+- advanced stats dashboard
+
+========================
+23. FIRST THING TO DO NOW
+========================
+
+Start by designing the full architecture and file structure for this system.
+
+Then implement Phase 1 first.
+
+For Phase 1, create:
+- project structure
+- config layer
+- Google Sheets service
+- Meta service abstraction
+- AI copy generation module
+- launch flow controller
+- status movement utilities
+
+Then tell me clearly:
+1. what files you created
+2. what each file does
+3. what environment variables / secrets are required
+4. what setup steps I must do
+5. how to test the first launch flow safely
+
+Do not simplify the business logic.
+Follow this spec exactly unless there is a technical reason to improve structure while preserving behavior.

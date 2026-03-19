@@ -1,0 +1,312 @@
+Extend the existing Telegram config bot with these new features.
+
+Important:
+- This bot must NOT do the product research itself.
+- This bot only collects configuration, stores it, and triggers the existing Product Research Bot.
+- The actual research must always be executed by the existing Product Research Bot using its current research engine and current logic.
+
+Do not rebuild from scratch.
+Do not break the existing working flows.
+Make minimal, targeted changes only.
+
+--------------------------------------------------
+MAIN NEW REQUIREMENTS
+--------------------------------------------------
+
+1. Research parameters command
+
+Add a new Telegram command:
+
+/parameters
+
+This command must let me configure the research parameters used for the next scheduled run.
+
+These parameters must match the same types of parameters already used by the existing Product Research Bot.
+
+The config bot should either:
+- reuse the same parameter schema/config format already used by the Product Research Bot, or
+- mirror it exactly if direct reuse is not possible
+
+Do NOT invent a completely different parameter format if the Product Research Bot already has one.
+
+Before implementing, inspect the Product Research Bot and identify:
+- where its research parameters are defined
+- how they are stored
+- how they are read at runtime
+
+Then make the config bot compatible with that same structure.
+
+--------------------------------------------------
+2. /parameters flow
+--------------------------------------------------
+
+When I use /parameters, the bot should open a configuration flow for research settings.
+
+At minimum, it must allow me to choose/edit the same research parameters as the Product Research Bot currently supports, such as for example:
+- active / inactive ads
+- video / image / both
+- source/platforms
+- country / market
+- other current research filters already existing in the Product Research Bot
+
+Do not guess blindly.
+First inspect the Product Research Bot and list the real supported parameters.
+Then expose those same parameters in this config bot.
+
+The UX can be:
+- inline buttons
+- reply keyboard
+- step-by-step menu
+
+Best approach:
+Use a menu-based Telegram flow with inline buttons where possible.
+
+Example:
+
+/parameters
+
+Bot:
+Current research parameters:
+- Ad status: Active
+- Creative type: Video
+- Source: Facebook Ads Library
+- Country: US
+
+Choose what to edit:
+1. Ad status
+2. Creative type
+3. Source
+4. Country
+5. Save
+6. Cancel
+
+When saved, these parameters must be stored persistently and later passed to the Product Research Bot.
+
+--------------------------------------------------
+3. Keyword flow change
+--------------------------------------------------
+
+Keep the existing keyword collection flow, but change the total ads logic as follows:
+
+Current desired flow:
+
+1. Bot asks:
+"Send tomorrow’s research keywords separated by commas."
+
+Example:
+portable blender, car vacuum, posture corrector
+
+2. After I send the keywords, the bot asks:
+"How many total ads do you want to extract?"
+
+Example:
+30
+
+3. The bot must automatically divide the total ads target across the keywords.
+
+Example:
+3 keywords, total target 30
+→ 10 ads per keyword
+
+If division is not exact, distribute the remainder fairly.
+
+Example:
+3 keywords, total target 32
+→ keyword1: 11
+→ keyword2: 11
+→ keyword3: 10
+
+Store both:
+- total_ads_target
+- per_keyword_targets
+
+Example stored config:
+
+{
+  "date": "2026-03-19",
+  "keywords": [
+    { "term": "portable blender", "ads_target": 11 },
+    { "term": "car vacuum", "ads_target": 11 },
+    { "term": "posture corrector", "ads_target": 10 }
+  ],
+  "total_ads_target": 32
+}
+
+4. After saving, the bot must confirm:
+
+Tomorrow’s research configuration saved.
+
+Keywords:
+- portable blender → 11
+- car vacuum → 11
+- posture corrector → 10
+
+Total ads target: 32
+
+--------------------------------------------------
+4. Trigger the existing Product Research Bot
+--------------------------------------------------
+
+This config bot must NOT perform extraction itself.
+
+At the configured research time, this bot must trigger the existing Product Research Bot.
+
+Important:
+- reuse the Product Research Bot’s real execution path
+- do not duplicate its research logic in this config bot
+- do not create a second research engine
+
+Before implementing, inspect the Product Research Bot and identify the best trigger method.
+
+Preferred trigger options, in order:
+1. call an internal function/service entrypoint if both bots are in the same codebase
+2. call an internal API endpoint exposed by the Product Research Bot
+3. enqueue a job/task for the Product Research Bot
+4. another clean existing trigger path already used in the codebase
+
+Do NOT choose a hacky trigger if a clean internal trigger already exists.
+
+At research time, this config bot should pass:
+- date config
+- keyword list with per-keyword targets
+- saved research parameters
+- timezone/schedule context if needed
+
+The Product Research Bot should then run normally using its own pipeline.
+
+--------------------------------------------------
+5. Reports
+--------------------------------------------------
+
+After the Product Research Bot finishes, this config bot must send me a report in Telegram.
+
+Important:
+- the report should come from the real results of the Product Research Bot
+- this config bot should not fabricate the report itself without getting actual execution results
+
+Preferred approach:
+- Product Research Bot returns results to config bot
+or
+- Product Research Bot writes run results to shared storage and config bot reads them
+or
+- Product Research Bot directly notifies config bot with completion payload
+
+Report example:
+
+Daily Research Report
+
+Keywords used:
+portable blender → 11
+car vacuum → 11
+posture corrector → 10
+
+Parameters:
+Ad status: Active
+Creative type: Video
+Source: Facebook Ads Library
+Country: US
+
+Results:
+portable blender → found 11
+car vacuum → found 10
+posture corrector → found 9
+
+Duplicates skipped: 8
+Total collected: 30
+Execution time: 14 minutes
+Status: Completed
+
+If partially failed, report that honestly.
+
+--------------------------------------------------
+6. Settings and persistence
+--------------------------------------------------
+
+Persist these separately and clearly:
+
+A. Schedule settings
+- timezone
+- reminder_time
+- research_time
+
+B. Tomorrow run config
+- keywords
+- total_ads_target
+- per_keyword_targets
+
+C. Research parameters
+- same structure as Product Research Bot parameters
+
+Use persistent storage, not volatile memory.
+
+--------------------------------------------------
+7. Commands summary
+--------------------------------------------------
+
+The config bot should now support:
+
+/timezone
+- detect timezone from location or set manually
+- then ask reminder time and research time if not yet configured
+
+/settings
+- show current timezone, reminder time, research time
+
+/parameters
+- show and edit research parameters matching the Product Research Bot
+
+/cancel
+- cancel current input flow
+
+Keep the existing daily keyword request flow.
+
+--------------------------------------------------
+8. Scheduler behavior
+--------------------------------------------------
+
+The config bot still handles:
+- daily keyword reminder at reminder_time
+- fallback reminder retries every 5 minutes up to 5 times
+- fallback to yesterday’s configuration if no response
+- trigger time for next-day research at research_time
+
+But at research_time it must trigger the Product Research Bot, not run research itself.
+
+--------------------------------------------------
+9. Validation
+--------------------------------------------------
+
+Add validation for:
+- valid timezone
+- valid HH:MM times
+- non-empty keyword list
+- numeric total ads target
+- duplicate keyword removal
+- parameter choices must match supported Product Research Bot values
+
+--------------------------------------------------
+10. Before editing code
+--------------------------------------------------
+
+Before making changes, inspect the current codebase and tell me:
+
+1. where the existing config bot keyword flow lives
+2. where timezone/reminder/research schedule are stored
+3. how the scheduler is initialized
+4. where the Product Research Bot parameters are defined
+5. what exact parameters the Product Research Bot currently supports
+6. what is the cleanest way for the config bot to trigger the Product Research Bot
+7. how the Product Research Bot can return/send run results for reporting
+
+Then implement the smallest clean production-safe changes.
+
+--------------------------------------------------
+11. Important constraints
+--------------------------------------------------
+
+- Do NOT rewrite the working reminder flow unless needed
+- Do NOT rewrite the working timezone setup unless needed
+- Do NOT replace the Product Research Bot logic
+- Do NOT duplicate the research engine in the config bot
+- Do NOT invent a new parameter model if one already exists
+- Reuse existing structures and services whenever possible

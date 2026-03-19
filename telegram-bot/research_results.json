@@ -1,0 +1,27 @@
+{
+  "status": "completed",
+  "triggered_at": "2026-03-18T01:40:00.010962",
+  "completed_at": "2026-03-18T02:00:38.965763",
+  "elapsed_seconds": 1236,
+  "per_keyword": {
+    "Adele-hues%5": {
+      "target": 100,
+      "status": "ok"
+    },
+    "Fashion-dujour": {
+      "target": 100,
+      "status": "ok"
+    },
+    "BoutiqueFortune NOR": {
+      "target": 100,
+      "status": "cancelled"
+    }
+  },
+  "parameters": {
+    "countries": [
+      "France"
+    ],
+    "media_type": "video",
+    "active_status": "active"
+  }
+}

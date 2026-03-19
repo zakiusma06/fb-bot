@@ -1,0 +1,149 @@
+Update the Shopify pricing → product creation bot with the following behavior.
+
+--------------------------------------------------
+MAIN LOGIC
+
+The product creation pipeline already works correctly.
+
+So when I enter:
+PRICE
+COMPARE AT PRICE
+
+the bot must immediately:
+
+1. create the Shopify product
+2. upload images
+3. generate title and description
+4. publish the product automatically
+
+After publishing, the bot must send me:
+
+- storefront  link
+
+Then it must show editing options.
+
+--------------------------------------------------
+POST-CREATION OPTIONS
+
+After the product is created and published, the bot must show these options:
+
+APPROVE PRODUCT
+CHANGE TITLE
+CHANGE DESCRIPTION
+DELETE IMAGE 1
+DELETE IMAGE 2
+DELETE IMAGE 3
+DELETE IMAGE 4
+DELETE IMAGE 5
+DELETE PRODUCT
+NEXT PRODUCT
+
+Explanation:
+
+APPROVE PRODUCT
+→ keep product as is
+→ update sheet fields:
+PRODUCT NAME
+URL LANDING PAGE
+STATU = READY FOR ADS
+
+CHANGE TITLE
+→ allow me to enter a new title
+→ update Shopify product title
+
+CHANGE DESCRIPTION
+→ allow me to enter new description
+→ update Shopify product description
+
+DELETE IMAGE X
+→ remove selected image from Shopify product
+
+DELETE PRODUCT
+→ delete the Shopify product completely
+→ do not write URL LANDING PAGE to sheet
+
+NEXT PRODUCT
+→ move to next product waiting for pricing
+
+--------------------------------------------------
+NEXT PRODUCT BEHAVIOR
+
+The bot must NEVER automatically show the next product.
+
+It must wait until I press:
+
+NEXT PRODUCT
+
+Only after I click NEXT PRODUCT should it load the next product.
+
+--------------------------------------------------
+IMAGE VERIFICATION RULES
+
+Before downloading or uploading any image from the product page, the bot must verify that the image is a real product image.
+
+Reject images that are:
+
+logos  
+icons  
+brand marks  
+payment badges  
+shipping badges  
+footer graphics  
+header graphics  
+text banners  
+decorative graphics  
+placeholders  
+
+Only keep images that clearly show the product.
+
+Accepted examples:
+
+main product photo  
+product gallery photos  
+product usage photos  
+feature close-up photos  
+
+--------------------------------------------------
+IMAGE DUPLICATE PROTECTION
+
+Before using any image, the bot must check if the image is a duplicate.
+
+Skip the image if:
+
+same image URL  
+same downloaded file hash  
+near identical image  
+resized duplicate  
+cropped duplicate  
+
+Do not upload duplicate images to Shopify.
+
+--------------------------------------------------
+FINAL IMAGE COUNT
+
+After filtering and duplicate removal:
+
+minimum images = 2  
+maximum images = 5  
+
+Only these validated images should be uploaded to Shopify.
+
+--------------------------------------------------
+IMPORTANT
+
+Do not modify the rest of the system.
+
+Keep existing logic for:
+
+Google Sheets
+Telegram bot
+product research pipeline
+pricing workflow
+Shopify creation pipeline
+
+Only update:
+
+post-creation control panel  
+image validation  
+image deduplication  
+next product behavior

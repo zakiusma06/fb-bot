@@ -1,0 +1,80 @@
+Do not change the currently working duplicate detection logic. It is already working well.
+
+I want a targeted update only.
+
+Main goals:
+1. Add the product image to sheet file records.
+2. For sheet-based duplicate detection, use image matching as the first check.
+3. Keep the current duplicate detection logic exactly as the fallback/secondary check.
+4. Change “Open Existing in Shopify” so it opens the public storefront product link, not the admin or preview link.
+
+Important:
+- Do not rewrite the current duplicate logic.
+- Do not remove any current duplicate checks.
+- Do not refactor unrelated working code.
+- Make minimal, isolated changes only.
+
+Tasks:
+
+1) Inspect first, then edit
+Before making changes, inspect the codebase and identify:
+- where sheet rows are created/saved
+- where the product image used for sourcing search currently exists
+- where the duplicate detection pipeline starts
+- where the “Open Existing in Shopify” URL is generated
+
+Then make only the required changes.
+
+2) Add product image to sheet file records
+Extend the sheet record structure safely to store the product image used for sourcing/searching.
+
+Store, if possible:
+- image_url
+- image_hash or image_fingerprint
+
+Use the same product image that is already used to search for the sourcing link.
+
+Do not break the current sheet format. Only extend it safely.
+
+3) Use sheet image matching as first duplicate check
+For products coming from sheet files, duplicate detection must run in this order:
+
+First:
+- compare the new product image against the image saved in the sheet record
+- use image matching / image hash / image fingerprint as the first duplicate signal
+
+Second:
+- if no confident image duplicate is found, run the existing duplicate detection logic exactly as it already works now
+
+Important:
+- preserve the current duplicate system
+- only prepend the sheet-image duplicate check before it
+- if an image hash helper already exists, reuse it
+- if not, add a small isolated helper only for this feature
+
+4) Matching source
+The exact image used to search for the sourcing link must also be the one saved in the sheet and used later for duplicate detection.
+
+5) UI behavior
+Keep the current duplicate warning UI and actions exactly as they are:
+- Skip (Mark as Duplicate)
+- Open Existing in Shopify
+- Force Approve (Ignore Warning)
+
+Do not change the flow unless required for the new image-first check.
+
+6) Open Existing in Shopify must use public link
+Change “Open Existing in Shopify” so it returns the public storefront product URL, not:
+- Shopify admin URL
+- preview URL
+
+Preferred logic:
+- if product is published, build/open the public storefront URL using the store domain + product handle
+- prefer the real customer-facing product page
+- only if truly unavailable, fall back to the best non-admin customer-facing link possible
+
+7) Final constraint
+Do not replace the current duplicate system.
+Add sheet-image matching before it.
+Save the product image in the sheet.
+Use the public Shopify storefront link for “Open Existing in Shopify”.

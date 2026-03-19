@@ -1,0 +1,127 @@
+modules = ["nodejs-24", "python-3.11"]
+
+  [[artifacts]]
+  id = "artifacts/api-server"
+
+  [[artifacts]]
+  id = "artifacts/mockup-sandbox"
+
+  [deployment]
+  deploymentTarget = "autoscale"
+  build = ["pnpm", "--filter", "@workspace/api-server", "run", "build"]
+  run = ["node", "artifacts/api-server/dist/index.js"]
+
+  [workflows]
+runButton = "Project"
+
+  [[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Telegram Bot"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Pricing Bot"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Creative Hunt Bot"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Scheduler Bot"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Ads Launch Bot"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Approval Bot"
+
+  [[workflows.workflow]]
+  name = "Telegram Bot"
+  author = "agent"
+
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "cd /home/runner/workspace/telegram-bot && python main.py"
+
+  [workflows.workflow.metadata]
+  outputType = "console"
+
+  [[workflows.workflow]]
+  name = "Pricing Bot"
+  author = "agent"
+
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "cd /home/runner/workspace/telegram-bot && python pricing_main.py"
+
+  [workflows.workflow.metadata]
+  outputType = "console"
+
+  [[workflows.workflow]]
+  name = "Creative Hunt Bot"
+  author = "agent"
+
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "cd /home/runner/workspace/telegram-bot && python creative_hunt_main.py"
+
+  [workflows.workflow.metadata]
+  outputType = "console"
+
+  [[workflows.workflow]]
+  name = "Scheduler Bot"
+  author = "agent"
+
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "cd /home/runner/workspace/telegram-bot && python scheduler_main.py"
+
+  [workflows.workflow.metadata]
+  outputType = "console"
+
+[[workflows.workflow]]
+name = "Ads Launch Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace/telegram-bot && python ads_launch_main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Approval Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace/telegram-bot && python approval_main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+  [agent]
+  stack = "PNPM_WORKSPACE"
+expertMode = true
+
+  [postMerge]
+  path = "scripts/post-merge.sh"
+  timeoutMs = 20000
+
+  [nix]
+  channel = "stable-25_05"
+  packages = ["alsa-lib", "atk", "cairo", "cups", "dbus", "expat", "freetype", "gdk-pixbuf", "gitFull", "glib", "gtk3", "lcms2", "libdrm", "libgbm", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "libxkbcommon", "mesa", "nspr", "nss", "openjpeg", "pango", "playwright-driver", "rapidfuzz-cpp", "taskflow", "tcl", "tk", "udev", "xorg.libX11", "xorg.libXScrnSaver", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXi", "xorg.libXrandr", "xorg.libXtst", "xorg.libxcb", "zlib"]
+
+  [userenv]
+
+  [userenv.shared]
+  

@@ -1,0 +1,164 @@
+Improve the WEIGHT extraction logic for 1688 sourcing pages.
+
+Current issue:
+Weight detection fails because the bot relies on clicking the "Packing" tab. This is unreliable and often the weight is already present in hidden data or page scripts.
+
+Implement a multi-method extraction pipeline after the Fatkun redirect.
+
+---------------------------------------------------
+STEP 1 — WAIT FOR FINAL 1688 REDIRECT
+---------------------------------------------------
+
+The bot starts from a Fatkun sourcing link such as:
+
+https://www.fatkun.net/image-search/red?id=XXXX
+
+Process:
+
+1. open the Fatkun link
+2. wait until the page automatically redirects
+3. detect when the final 1688 product page URL is loaded
+4. only after the redirect completes, begin weight extraction
+
+Do NOT attempt to extract weight before the redirect finishes.
+
+---------------------------------------------------
+STEP 2 — METHOD 1: EXTRACT FROM EMBEDDED PAGE DATA
+---------------------------------------------------
+
+Scan all embedded script tags for product data.
+
+Look for JSON or script objects such as:
+
+window.__INIT_DATA__
+window.__GLOBAL_DATA__
+any embedded product data objects
+
+Search for fields containing:
+
+重量
+重量(g)
+净重
+毛重
+商品重量
+
+If found, extract the nearest numeric value.
+
+Example:
+
+重量(g): 500
+
+Save:
+
+WEIGHT GRAM = 500
+
+If a valid number is found, stop further extraction.
+
+---------------------------------------------------
+STEP 3 — METHOD 2: EXTRACT FROM FULL PAGE TEXT
+---------------------------------------------------
+
+If Method 1 fails:
+
+1. wait until the full page is rendered
+2. read the entire page text using:
+
+document.body.innerText
+
+Search for keywords:
+
+重量
+重量(g)
+净重
+毛重
+商品重量
+
+If found, extract the nearest numeric value.
+
+Example:
+
+重量(g) 500
+
+Save:
+
+WEIGHT GRAM = 500
+
+If found, stop the extraction process.
+
+---------------------------------------------------
+STEP 4 — METHOD 3: EXTRACT FROM NETWORK RESPONSES
+---------------------------------------------------
+
+If Method 2 fails:
+
+Monitor network requests triggered by the page.
+
+Intercept responses related to:
+
+product details
+product attributes
+specifications
+packing data
+
+Parse the JSON response bodies and search for:
+
+重量
+重量(g)
+净重
+毛重
+商品重量
+
+Extract the numeric value.
+
+Example:
+
+weight_g = 500
+
+Save:
+
+WEIGHT GRAM = 500
+
+If found, stop extraction.
+
+---------------------------------------------------
+STEP 5 — METHOD 4: CLICK PACKING TAB (FINAL FALLBACK)
+---------------------------------------------------
+
+Only if all previous methods fail:
+
+1. locate the tab labeled:
+
+Packing
+
+2. click the tab
+3. wait until the packing section loads
+4. search inside the section for:
+
+重量(g)
+
+Example:
+
+重量(g) 500
+
+Extract the number and save:
+
+WEIGHT GRAM = 500
+
+---------------------------------------------------
+FINAL RULES
+---------------------------------------------------
+
+Extraction order must be:
+
+1. Embedded JSON data
+2. Hidden DOM text
+3. Network responses
+4. Packing tab click
+
+Stop immediately once a valid weight is found.
+
+If all methods fail:
+
+WEIGHT GRAM = empty
+
+Never guess or estimate the weight.

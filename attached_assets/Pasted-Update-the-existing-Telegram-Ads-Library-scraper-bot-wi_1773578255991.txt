@@ -1,0 +1,261 @@
+Update the existing Telegram Ads Library scraper bot without breaking the current working Telegram workflow.
+
+The bot already:
+- runs from Telegram
+- extracts ads from Meta Ads Library
+- writes to Google Sheets
+
+Now I want to upgrade it so it groups ads into product clusters and saves structured rows.
+
+Do NOT rebuild the bot from scratch.
+Modify the existing code carefully.
+
+--------------------------------------------------
+
+NEW GOOGLE SHEET STRUCTURE
+
+The sheet must contain exactly these columns in this exact order:
+
+SKU
+URL PRODUCT
+URL PRODUCT 2
+URL PRODUCT 3
+URL PRODUCT 4
+URL PRODUCT 5
+ADS LIBRARY MEDIA URL1
+ADS LIBRARY MEDIA URL2
+ADS LIBRARY MEDIA URL3
+ADS LIBRARY MEDIA URL4
+ADS LIBRARY MEDIA URL5
+NOTE
+PRICE
+COMPARE AT PRICE
+URL LANDING PAGE
+PRODUCT NAME
+STATU
+FB COST (DAY1)
+FB COST (TEST) DAY2
+
+The bot should ONLY fill these fields:
+
+SKU
+URL PRODUCT
+URL PRODUCT 2
+URL PRODUCT 3
+URL PRODUCT 4
+URL PRODUCT 5
+ADS LIBRARY MEDIA URL1
+ADS LIBRARY MEDIA URL2
+ADS LIBRARY MEDIA URL3
+ADS LIBRARY MEDIA URL4
+ADS LIBRARY MEDIA URL5
+NOTE
+
+The bot must leave these fields EMPTY:
+
+PRICE
+COMPARE AT PRICE
+URL LANDING PAGE
+PRODUCT NAME
+STATU
+FB COST (DAY1)
+FB COST (TEST) DAY2
+
+--------------------------------------------------
+
+NEW CORE WORKFLOW
+
+Current logic saves one row per ad.
+
+Change it to:
+
+ONE ROW = ONE PRODUCT CLUSTER
+
+Steps:
+
+1. Bot finds an initial ad from Ads Library based on the user's search.
+2. Open the ad landing page.
+3. Extract probable product keywords from the landing page:
+   - page title
+   - product title
+   - H1/H2 headings
+   - repeated phrases
+4. Generate a cleaner search keyword from that landing page.
+5. Run a SECOND Ads Library search using those extracted keywords.
+6. Collect ads that appear to sell the same product.
+7. Build a product cluster.
+
+--------------------------------------------------
+
+PRODUCT URL COLLECTION
+
+For each cluster collect competitor product pages.
+
+Fields:
+
+URL PRODUCT
+URL PRODUCT 2
+URL PRODUCT 3
+URL PRODUCT 4
+URL PRODUCT 5
+
+Rules:
+
+- Minimum: 1 product URL
+- Maximum: 5 product URLs
+- Prefer different advertisers
+- Prefer different domains
+- Skip duplicates
+- Stop collecting after 5
+
+--------------------------------------------------
+
+MEDIA / CREATIVE COLLECTION
+
+Collect creatives from Ads Library.
+
+Fields:
+
+ADS LIBRARY MEDIA URL1
+ADS LIBRARY MEDIA URL2
+ADS LIBRARY MEDIA URL3
+ADS LIBRARY MEDIA URL4
+ADS LIBRARY MEDIA URL5
+
+Rules:
+
+- Minimum: 1
+- Maximum: 5
+- Prefer different advertisers
+- Prefer different creatives
+- If direct media URL not available, use Ads Library ad URL
+
+--------------------------------------------------
+
+PRODUCT CLUSTERING RULES
+
+Ads should belong to the same cluster if:
+
+- landing page titles are similar
+- extracted keywords overlap
+- image similarity is high (if implemented)
+
+Use these signals:
+
+1. normalized product name
+2. landing page title similarity
+3. extracted keyword overlap
+4. image similarity (optional)
+
+If ads match these conditions they belong to the same product cluster.
+
+--------------------------------------------------
+
+SKU GENERATION
+
+Each cluster must generate a SKU.
+
+Format:
+
+PRD-0001
+PRD-0002
+PRD-0003
+
+Auto increment.
+
+--------------------------------------------------
+
+NOTE FIELD
+
+Fill NOTE with a short summary.
+
+Examples:
+
+"3 product URLs found, 5 creatives found"
+
+"clustered from 4 advertisers"
+
+"keywords extracted from landing page"
+
+--------------------------------------------------
+
+IMPORTANT IMPLEMENTATION RULES
+
+Do NOT break the Telegram bot commands.
+
+Keep:
+
+/start
+/extract
+/cancel
+/status
+
+The Telegram workflow should remain the same.
+
+Only change the extraction logic and sheet writer.
+
+--------------------------------------------------
+
+OUTPUT BEHAVIOR
+
+For each product cluster write ONE row:
+
+Example:
+
+SKU: PRD-0007
+
+URL PRODUCT: https://store1.com/product
+URL PRODUCT 2: https://store2.com/product
+URL PRODUCT 3: https://store3.com/product
+
+ADS LIBRARY MEDIA URL1: https://facebook.com/ads/library/...
+ADS LIBRARY MEDIA URL2: https://facebook.com/ads/library/...
+ADS LIBRARY MEDIA URL3: https://facebook.com/ads/library/...
+
+NOTE: "3 product URLs found, 3 creatives found"
+
+All other fields must stay empty.
+
+--------------------------------------------------
+
+ERROR HANDLING
+
+If:
+
+- fewer than 5 product URLs found
+- fewer than 5 creatives found
+
+still save the row.
+
+Only require minimum 1.
+
+--------------------------------------------------
+
+CODE REQUIREMENTS
+
+Keep modular structure:
+
+ads_scraper.py
+product_extractor.py
+cluster_builder.py
+sheet_writer.py
+telegram_bot.py
+
+Do not create a giant script.
+
+--------------------------------------------------
+
+FINAL RESULT
+
+The bot should still run from Telegram.
+
+But instead of writing many ad rows, it should now:
+
+1 product = 1 row
+
+Containing:
+
+1–5 product URLs
+1–5 creative URLs
+
+And leave pricing/test columns empty for manual work later.

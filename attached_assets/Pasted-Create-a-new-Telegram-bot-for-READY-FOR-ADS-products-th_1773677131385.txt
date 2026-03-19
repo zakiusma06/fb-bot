@@ -1,0 +1,192 @@
+Create a new Telegram bot for READY FOR ADS products that searches for additional Ads Library video creatives.
+
+--------------------------------------------------
+GOAL
+
+For products in the READY FOR ADS sheet tab, find new video creatives and let me approve them one by one in Telegram.
+
+When I approve a creative, save it into the next empty field:
+- ADS LIBRARY MEDIA URL 2
+- ADS LIBRARY MEDIA URL 3
+- ADS LIBRARY MEDIA URL 4
+- ADS LIBRARY MEDIA URL 5
+
+If I do not approve anything, I can stop searching and go to the next product.
+
+--------------------------------------------------
+GOOGLE SHEET REQUIREMENT
+
+The READY FOR ADS tab must contain these creative columns:
+
+- ADS LIBRARY MEDIA URL
+- ADS LIBRARY MEDIA URL 2
+- ADS LIBRARY MEDIA URL 3
+- ADS LIBRARY MEDIA URL 4
+- ADS LIBRARY MEDIA URL 5
+
+Do not remove any other existing columns.
+
+--------------------------------------------------
+BOT COMMANDS
+
+Add commands:
+- /creativehunt
+- /stop
+- /help
+
+Also add clickable menu/buttons.
+
+--------------------------------------------------
+TARGET PRODUCTS
+
+The bot should work on products in READY FOR ADS.
+
+For each product, it should try to fill the next empty creative field among:
+- ADS LIBRARY MEDIA URL 2
+- ADS LIBRARY MEDIA URL 3
+- ADS LIBRARY MEDIA URL 4
+- ADS LIBRARY MEDIA URL 5
+
+If all 5 creative fields are already filled, skip the product and move to the next one.
+
+--------------------------------------------------
+SEARCH PRIORITY
+
+The bot must search in this order:
+
+1. FIRST: use keywords/signals from the existing Ads Library link(s) already stored for the product
+   - start from ADS LIBRARY MEDIA URL
+   - also use ADS LIBRARY MEDIA URL 2/3/4/5 if already filled
+   - use these existing ad links as the first search source
+
+2. SECOND: use product title keywords from PRODUCT NAME
+
+3. THIRD: use product page/description signals if available
+
+4. FOURTH: use AI-generated related keywords
+
+Important:
+Always start with the keywords/signals from the existing Ads Library links before trying the other options.
+
+--------------------------------------------------
+VIDEO FILTER RULES
+
+Only keep creatives that are:
+- video ads
+- maximum duration: 2 minutes
+- relevant to the same product
+- not duplicates of existing saved creatives
+
+Skip:
+- non-video ads
+- videos longer than 2 minutes
+- duplicate creatives already saved in any of:
+  - ADS LIBRARY MEDIA URL
+  - ADS LIBRARY MEDIA URL 2
+  - ADS LIBRARY MEDIA URL 3
+  - ADS LIBRARY MEDIA URL 4
+  - ADS LIBRARY MEDIA URL 5
+
+--------------------------------------------------
+TELEGRAM REVIEW FLOW
+
+For each candidate creative found, always send me the VIDEO LINK in Telegram so I can check it manually.
+
+Message format example:
+
+Product 2 / 14
+
+Product:
+{PRODUCT NAME}
+
+Candidate creative:
+{Ads Library video link}
+
+Duration:
+01:24
+
+Buttons:
+- APPROVE
+- REJECT
+- STOP SEARCHING
+- NEXT PRODUCT
+
+Important:
+Every time a candidate is found, send me the video link in Telegram.
+
+--------------------------------------------------
+BUTTON ACTIONS
+
+APPROVE
+- save the creative link into the next empty field:
+  - ADS LIBRARY MEDIA URL 2
+  - or 3
+  - or 4
+  - or 5
+- then continue searching for more creatives for the same product until:
+  - all slots are full
+  - or I stop
+  - or no more candidates exist
+
+REJECT
+- do not save the link
+- continue to next candidate for the same product
+
+STOP SEARCHING
+- stop searching creatives for the current product
+- move to next product
+
+NEXT PRODUCT
+- skip remaining creative search for current product
+- move directly to next product
+
+--------------------------------------------------
+STOP CONDITIONS FOR EACH PRODUCT
+
+Stop searching for the current product when:
+- all creative slots are full
+OR
+- I press STOP SEARCHING
+OR
+- I press NEXT PRODUCT
+OR
+- no more valid candidates are found
+
+--------------------------------------------------
+DUPLICATE PROTECTION
+
+Before showing or saving a creative, verify that it is not already stored in any creative field for that product.
+
+Do not show duplicate creative links.
+Do not save duplicate creative links.
+
+--------------------------------------------------
+IMPORTANT
+
+Do not change the extraction bot.
+Do not change the approval bot.
+Do not change the pricing bot.
+
+This is a separate creative-hunting bot.
+
+Use the same Google Sheets file.
+
+Keep all existing columns.
+
+Only add/fill:
+- ADS LIBRARY MEDIA URL 2
+- ADS LIBRARY MEDIA URL 3
+- ADS LIBRARY MEDIA URL 4
+- ADS LIBRARY MEDIA URL 5
+
+--------------------------------------------------
+GOAL RESULT
+
+I want a bot that:
+- takes READY FOR ADS products
+- starts searching from the keywords/signals in the existing Ads Library links
+- then falls back to product title/description/AI keywords if needed
+- always sends me each video link in Telegram
+- lets me approve or reject each creative
+- saves approved creatives into ADS LIBRARY MEDIA URL 2/3/4/5
+- lets me stop and move to the next product whenever I want

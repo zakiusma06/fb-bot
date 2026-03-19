@@ -1,0 +1,76 @@
+Disable WEIGHT extraction completely in the system.
+
+Current issue:
+Weight detection on 1688 pages is unreliable and producing incorrect values.  
+From now on the system must NOT attempt to detect or extract product weight.
+
+---------------------------------------------------
+1. KEEP THE FIELD BUT DO NOT POPULATE IT
+---------------------------------------------------
+
+Keep the field:
+
+WEIGHT GRAM
+
+in the Google Sheets structure and in all sheet tabs.
+
+Do NOT remove the column.
+
+However:
+
+- the product research bot must NOT search for weight
+- the bot must NOT open Packing sections
+- the bot must NOT parse HTML for weight
+- the bot must NOT scan JSON or DOM for weight
+- the bot must NOT attempt any weight extraction method
+
+The field must remain empty when products are added.
+
+---------------------------------------------------
+2. REMOVE ALL WEIGHT EXTRACTION LOGIC
+---------------------------------------------------
+
+Delete or disable all logic related to:
+
+- _extract_weight_from_1688_html()
+- DOM scanning for weight
+- JSON parsing for weight
+- text scanning for weight
+- "重量(g)" detection
+- clicking the Packing tab
+- any fallback that searches for numbers followed by g/kg
+
+Weight extraction must not run anywhere in the pipeline.
+
+---------------------------------------------------
+3. KEEP BOT WORKFLOW UNCHANGED
+---------------------------------------------------
+
+The rest of the system must remain exactly the same:
+
+- product research bot
+- approval bot
+- pricing bot
+- sourcing lookup
+- supplier URL extraction
+- sourcing price extraction
+
+Only weight detection must be disabled.
+
+---------------------------------------------------
+4. WEIGHT FIELD HANDLING
+---------------------------------------------------
+
+When a product is inserted into Google Sheets:
+
+WEIGHT GRAM must always be:
+
+empty
+
+The field will be handled manually later if needed.
+
+---------------------------------------------------
+GOAL
+---------------------------------------------------
+
+Completely disable automated weight detection while keeping the WEIGHT GRAM column in the system.

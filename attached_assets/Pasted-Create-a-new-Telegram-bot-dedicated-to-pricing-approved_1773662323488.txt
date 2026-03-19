@@ -1,0 +1,164 @@
+Create a new Telegram bot dedicated to pricing approved products.
+
+This is a separate bot.
+
+--------------------------------------------------
+GOAL
+
+The bot must review products from the APPROVED sheet tab that are not priced yet.
+
+It should show products one by one and let me manually enter:
+
+- PRICE
+- COMPARE AT PRICE
+
+Then it should update the same row in the APPROVED tab.
+
+--------------------------------------------------
+TARGET PRODUCTS
+
+The bot must only show products from the APPROVED tab where pricing is not completed.
+
+A product should be considered "not priced yet" if:
+- PRICE is empty
+OR
+- COMPARE AT PRICE is empty
+
+Only these products should be shown in the pricing bot.
+
+--------------------------------------------------
+COMMANDS
+
+Add these commands:
+
+/start
+/price
+/stats
+/stop
+/help
+
+Also add clickable menu/buttons, not only typed commands.
+
+--------------------------------------------------
+MAIN FLOW
+
+When I send /price:
+
+1. Load all rows from the APPROVED tab
+2. Filter only products not priced yet
+3. Show them one by one
+
+Message format example:
+
+Product 3 / 42
+
+Product page:
+<URL PRODUCT>
+
+Status:
+APPROVED
+
+Price:
+<current PRICE or empty>
+
+Compare at price:
+<current COMPARE AT PRICE or empty>
+
+Buttons:
+- ADD PRICE
+- SKIP
+- STOP
+
+--------------------------------------------------
+ADD PRICE FLOW
+
+When I click ADD PRICE:
+
+Step 1:
+Bot asks:
+Enter PRICE
+
+Step 2:
+After I send PRICE, bot asks:
+Enter COMPARE AT PRICE
+
+Step 3:
+After I send COMPARE AT PRICE:
+- update the same row in the APPROVED tab
+- save PRICE
+- save COMPARE AT PRICE
+
+Then reply:
+✅ Pricing saved
+
+Then automatically show the next not-yet-priced product.
+
+--------------------------------------------------
+SKIP BUTTON
+
+When I click SKIP:
+- do not change the row
+- move to the next product
+
+--------------------------------------------------
+STOP BUTTON
+
+When I click STOP or send /stop:
+- stop the pricing session
+- clear session state
+- reply:
+Pricing session stopped.
+
+--------------------------------------------------
+STATISTICS
+
+Add pricing statistics similar to the previous bot.
+
+Use either the existing STATISTICS tab or update it with a pricing section.
+
+Track at least:
+
+- APPROVED TOTAL
+- PRICED
+- NOT YET PRICED
+- PRICING COMPLETION %
+
+Definitions:
+- APPROVED TOTAL = total rows in APPROVED
+- PRICED = rows in APPROVED where PRICE and COMPARE AT PRICE are both filled
+- NOT YET PRICED = APPROVED TOTAL - PRICED
+- PRICING COMPLETION % = PRICED / APPROVED TOTAL * 100
+
+When user sends /stats, show:
+
+Pricing Statistics
+
+Approved total: X
+Priced: Y
+Not yet priced: Z
+Completion: XX%
+
+Also update the STATISTICS sheet tab automatically.
+
+--------------------------------------------------
+GOOGLE SHEET UPDATE RULES
+
+Do not change extraction bot.
+Do not change approval bot.
+
+This bot only updates rows in APPROVED.
+
+It must preserve all existing columns.
+It must only update:
+- PRICE
+- COMPARE AT PRICE
+
+--------------------------------------------------
+IMPORTANT
+
+- Keep all existing columns in the sheet
+- Use the same Google Sheets file
+- Keep code modular
+- Support Telegram clickable menu/buttons
+- Show products one by one
+- Automatically continue after saving price

@@ -1,0 +1,269 @@
+Update the system with the following changes.
+
+Do NOT redesign the system architecture. Only extend the existing logic.
+
+--------------------------------
+1. RESTORE PREVIOUS SOURCING FEATURE
+--------------------------------
+
+Restore the previous sourcing lookup feature that was removed earlier.
+
+Important:
+Do NOT create a new sourcing system.
+
+Reuse the previously implemented sourcing logic because it already handled:
+
+- supplier search
+- image mismatch filtering
+- ignoring logos
+- avoiding non-product images
+- finding correct supplier listings
+
+Only simplify its output.
+
+--------------------------------
+2. USE FATKUN IMAGE SEARCH ONLY
+--------------------------------
+
+For sourcing lookup use ONLY:
+
+https://www.fatkun.net/image-search
+
+Important rules:
+
+- Do NOT implement other supplier search APIs
+- Do NOT attempt other image search engines
+- Always use Fatkun image search
+
+This method was previously tested and works best.
+
+--------------------------------
+3. IMAGE SOURCE FOR SOURCING SEARCH
+--------------------------------
+
+The image used for sourcing search must come from the PRODUCT PAGE.
+
+Extraction priority:
+
+1. main product image from product page
+2. additional product images from product page
+3. screenshot of the product section if image download fails
+
+Do NOT use:
+
+- ads library thumbnails
+- ad video frames
+- logos
+- store banners
+- icons
+
+Reuse the image filtering logic from the previously deleted sourcing feature.
+
+--------------------------------
+4. EXTRACT SOURCING DATA
+--------------------------------
+
+From the supplier result extract:
+
+- supplier product URL
+- supplier product price
+
+Convert supplier price automatically to USD.
+
+Save only the following fields:
+
+SOURCING PRICE USD
+SOURCING URL
+
+--------------------------------
+5. UPDATE GOOGLE SHEETS STRUCTURE
+--------------------------------
+
+Add these fields to ALL sheet tabs:
+
+CATEGORY
+SOURCING PRICE USD
+SOURCING URL
+
+These fields must exist in:
+
+PENDING
+APPROVED
+DISAPPROVED
+READY FOR ADS
+ADS RUNNING
+WINNER
+LOSER
+
+When rows move between sheets, these fields must move with the row.
+
+--------------------------------
+6. add a concept of "CATEGORY"
+--------------------------------
+
+add a concept of "CATEGORY".
+
+Use only one classification field:
+
+CATEGORY
+
+CATEGORY must be inserted immediately after KEYWORD in all sheet structures.
+
+Example structure:
+
+SKU
+KEYWORD
+CATEGORY
+URL PRODUCT
+ADS LIBRARY MEDIA URL
+NOTE
+PRICE
+COMPARE AT PRICE
+URL LANDING PAGE
+PRODUCT NAME
+STATU
+SOURCING PRICE USD
+SOURCING URL
+
+--------------------------------
+7. AUTOMATIC CATEGORY DETECTION
+--------------------------------
+
+Automatically detect CATEGORY using AI.
+
+The AI should analyze:
+
+- product title
+- product description
+- product images
+
+CATEGORY must always be chosen from this fixed list:
+
+Home
+Kitchen
+Beauty
+Health
+Tools
+Car
+Fashion
+Pet
+Gadgets
+Outdoor
+Kids
+Other
+
+Do NOT generate custom category names.
+
+--------------------------------
+8. PRODUCT RESEARCH BOT WORKFLOW
+--------------------------------
+
+Extend the product research bot with the following steps:
+
+1. find product from Ads Library
+2. open product page
+3. extract clean product images
+4. restore previous sourcing feature
+5. search supplier using Fatkun image search
+6. extract supplier URL
+7. extract supplier price
+8. convert supplier price to USD
+9. detect CATEGORY using AI
+10. save data into Google Sheets
+
+Saved fields must include:
+
+KEYWORD
+CATEGORY
+URL PRODUCT
+ADS LIBRARY MEDIA URL
+SOURCING PRICE USD
+SOURCING URL
+
+--------------------------------
+9. UPDATE PRODUCT APPROVAL BOT DISPLAY
+--------------------------------
+
+When the approval bot shows a product for review, it must display:
+
+- product page URL
+- ads library creative URL
+- sourcing price (USD)
+- sourcing supplier URL
+- keyword
+- category
+
+Example format:
+
+Product 4 / 52
+
+Keyword:
+solar light
+
+Category:
+Home
+
+Product Page:
+https://example-store.com/product/solar-lamp
+
+Ads Library Creative:
+https://www.facebook.com/ads/library/?id=123456789
+
+Sourcing Price:
+$3.20 USD
+
+Supplier Link:
+https://detail.1688.com/offer/123456789.html
+
+Buttons remain unchanged:
+
+APPROVE
+DISAPPROVE
+NEXT
+STOP
+
+--------------------------------
+10. PRODUCT APPROVAL BOT FILTERS
+--------------------------------
+
+Add filters to the approval bot:
+
+PRICE RANGE FILTER
+
+Use:
+
+SOURCING PRICE USD
+
+Example ranges:
+
+under $5
+$5–10
+$10–20
+$20+
+
+CATEGORY FILTER
+
+Filter by:
+
+CATEGORY
+
+KEYWORD FILTER
+
+Keywords must remain sorted by approval rate.
+
+NO FILTER OPTION
+
+User must always have the option:
+
+Show all pending products
+
+--------------------------------
+IMPLEMENTATION RULES
+--------------------------------
+
+- Restore the previous sourcing feature
+- Use Fatkun image search only
+- Save sourcing price as USD
+- Add CATEGORY to all sheet tabs
+- Display sourcing data in approval bot
+- Do not change other working system components

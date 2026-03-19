@@ -1,0 +1,167 @@
+Fix the current Meta Ads Library clustering logic.
+
+Current problem:
+The bot is still returning only 1 product page URL and 1 media URL, even when more should exist.
+
+Root issue:
+The second-pass search is too weak and too literal.
+It only searches with one extracted keyword/title and does not expand the search enough.
+
+I want you to improve the search strategy after the bot finds the first product page.
+
+NEW REQUIRED LOGIC
+
+After the bot finds the first landing page/product page, it must:
+
+1. Open the product page
+2. Extract:
+   - main product title
+   - page title
+   - short description
+   - bullet points if available
+   - repeated important phrases
+3. Generate MULTIPLE related keyword queries from the product page content
+
+Do not search with only one exact title.
+
+Generate a keyword set including:
+- exact product title
+- shortened versions
+- reordered phrase variations
+- noun phrase subsets
+- related product phrases from description
+- synonyms if obvious from page text
+
+Example:
+If extracted title is:
+"Détecteur d'angle numérique magnétique"
+
+The bot should try searches like:
+- Détecteur d'angle numérique magnétique
+- détecteur d'angle numérique
+- angle numérique magnétique
+- détecteur angle magnétique
+- niveau numérique magnétique
+- inclinomètre numérique
+- rapporteur numérique magnétique
+
+This is only an example.
+Implement generic logic so it works for other products too.
+
+SEARCH REQUIREMENTS
+
+For each generated keyword variation:
+- search Meta Ads Library
+- search both ACTIVE and INACTIVE ads
+- merge results from all searches
+- deduplicate results
+- cluster results that belong to the same product
+
+IMPORTANT:
+The bot must be more aggressive in finding the same product sold by multiple advertisers.
+
+COLLECTION GOALS
+
+For each product cluster, the bot should try to collect:
+- 1 to 5 real product page URLs
+- 1 to 5 different creatives/media URLs
+
+It should not stop after finding only 1 if more can be found.
+
+PRODUCT URL RULES
+
+- Visit the ad destination and resolve the real product page URL
+- Save final real landing/product page URL
+- Use different advertisers when possible
+- Use different domains when possible
+- Continue searching until:
+  - 5 product URLs found, or
+  - search space exhausted
+
+MEDIA URL RULES
+
+- Collect different creatives, not same creative repeated
+- A creative can be considered different if:
+  - ad library URL differs
+  - media URL differs
+  - thumbnail differs
+  - advertiser differs
+  - ad text differs significantly
+- Continue searching until:
+  - 5 creatives found, or
+  - search space exhausted
+
+ACTIVE STATUS FIX
+
+Do not restrict the second-pass search to only one active status.
+The bot must search:
+- active
+- inactive
+
+and combine results.
+
+QUERY EXPANSION MODULE
+
+Add a dedicated function/module for query expansion from product page content.
+
+For example:
+expand_product_queries(product_title, page_title, description_text) -> list[str]
+
+This function should return multiple search variations.
+
+SEARCH STRATEGY
+
+For each product cluster:
+1. initial ad found
+2. landing page opened
+3. extract product clues
+4. generate expanded search queries
+5. search Ads Library with all queries
+6. search both active and inactive
+7. merge results
+8. deduplicate
+9. collect up to 5 unique product URLs
+10. collect up to 5 unique creatives
+
+DEBUG LOGGING
+
+Add logs like:
+- extracted product title: ...
+- generated search queries: ...
+- searching active with query: ...
+- searching inactive with query: ...
+- found candidate ad: ...
+- collected product URL count: ...
+- collected creative count: ...
+- cluster completed with X product URLs and Y creatives
+
+IMPORTANT OUTPUT RULE
+
+Do not change the Google Sheet columns.
+Keep the current desired sheet format.
+
+But improve the internal search so the bot can fill more than 1 product URL and more than 1 creative when possible.
+
+IMPORTANT EXAMPLE TO TEST
+
+Use this example as a test case while developing:
+https://yahory.com/products/h6v
+
+If that page yields a title like:
+Détecteur d'angle numérique magnétique
+
+the bot should be able to generate multiple related search queries and find more matching product pages and creatives in Ads Library.
+
+Do not keep the search too literal.
+Make it broader but still relevant.
+
+FINAL GOAL
+
+I want the bot to:
+- extract the first product page
+- understand the product better from the page
+- generate multiple relevant search queries
+- search both active and inactive Ads Library
+- collect more matching product URLs
+- collect more different creatives
+- not stop at only 1 unless truly no more exists

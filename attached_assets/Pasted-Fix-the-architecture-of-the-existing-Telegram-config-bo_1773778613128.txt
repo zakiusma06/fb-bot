@@ -1,0 +1,204 @@
+Fix the architecture of the existing Telegram config bot.
+
+Important correction:
+The config bot is still running the product research itself.
+This is wrong.
+
+I want the config bot to ONLY:
+- collect tomorrow’s keywords
+- collect total ads target
+- let me configure research parameters
+- manage timezone / reminder time / research time
+- store all this configuration
+- trigger the FIRST / ORIGINAL Product Research Bot at the scheduled time
+- receive the final results and send me the report on Telegram
+
+The config bot must NOT execute any research logic itself.
+
+--------------------------------------------------
+REQUIRED ARCHITECTURE
+--------------------------------------------------
+
+There are 2 separate bots/services:
+
+1. Config Bot
+Responsibilities only:
+- Telegram interaction
+- timezone setup
+- reminder time setup
+- research schedule setup
+- /parameters command
+- collect keywords
+- collect total ads target
+- divide total ads target by keyword
+- save config
+- trigger the original Product Research Bot at the scheduled time
+- send final report after the original Product Research Bot finishes
+
+2. Original Product Research Bot
+Responsibilities only:
+- run the actual product research
+- use its existing extraction logic
+- use its existing duplicate detection
+- use its existing sourcing logic
+- use its existing approval/disapproval pipeline
+- return execution results when finished
+
+The config bot must never directly perform extraction, scraping, product research, or duplicate detection.
+
+--------------------------------------------------
+CRITICAL FIX
+--------------------------------------------------
+
+Right now the config bot is still using its own internal research execution.
+
+Remove that behavior.
+
+At research time, the config bot must call the ORIGINAL Product Research Bot only.
+
+Do not duplicate research code inside the config bot.
+Do not keep a second research engine in the config bot.
+
+--------------------------------------------------
+WHAT TO DO FIRST
+--------------------------------------------------
+
+Before editing, inspect the codebase and identify clearly:
+
+1. Where the original Product Research Bot entrypoint is
+2. How the original Product Research Bot is started manually today
+3. Whether it can be triggered by:
+   - internal function call
+   - shared service call
+   - internal API endpoint
+   - queued job
+   - command execution
+4. Which method is the cleanest and safest way to trigger the original Product Research Bot from the config bot
+5. How the original Product Research Bot can send back final run results
+
+Then implement the cleanest trigger path.
+
+--------------------------------------------------
+TRIGGER REQUIREMENT
+--------------------------------------------------
+
+At the configured research time, the config bot must pass this payload to the original Product Research Bot:
+
+- date
+- keywords with divided per-keyword targets
+- total ads target
+- research parameters
+- timezone if needed
+- any existing run metadata required by the original bot
+
+Example payload:
+
+{
+  "date": "2026-03-19",
+  "keywords": [
+    { "term": "portable blender", "ads_target": 11 },
+    { "term": "car vacuum", "ads_target": 11 },
+    { "term": "posture corrector", "ads_target": 10 }
+  ],
+  "total_ads_target": 32,
+  "parameters": {
+    "ad_status": "active",
+    "creative_type": "video",
+    "source": "facebook_ads_library",
+    "country": "US"
+  }
+}
+
+The original Product Research Bot must then run using its own existing research flow.
+
+--------------------------------------------------
+REPORTING REQUIREMENT
+--------------------------------------------------
+
+When the original Product Research Bot finishes, it must return real execution results.
+
+The config bot must then send me the final Telegram report.
+
+The report must be based on actual output from the original Product Research Bot, not from fake counters in the config bot.
+
+Possible valid ways:
+- original bot returns results directly
+- original bot writes results to shared storage and config bot reads them
+- original bot calls back the config bot with completion payload
+
+Use the cleanest existing architecture.
+
+--------------------------------------------------
+IMPORTANT CONSTRAINTS
+--------------------------------------------------
+
+- Do NOT rebuild the original Product Research Bot
+- Do NOT move research logic into the config bot
+- Do NOT duplicate duplicate-detection logic in the config bot
+- Do NOT duplicate sourcing logic in the config bot
+- Do NOT duplicate ad extraction logic in the config bot
+- Do NOT create a second version of the research pipeline
+
+The config bot should be an orchestrator only.
+The original Product Research Bot should remain the only executor.
+
+--------------------------------------------------
+KEYWORD FLOW
+--------------------------------------------------
+
+Keep this flow in the config bot:
+
+1. At reminder time, ask:
+"Send tomorrow’s research keywords separated by commas."
+
+2. User sends:
+portable blender, car vacuum, posture corrector
+
+3. Bot asks:
+"How many total ads do you want to extract?"
+
+4. User sends:
+32
+
+5. Config bot divides evenly across keywords:
+portable blender → 11
+car vacuum → 11
+posture corrector → 10
+
+6. Save the config.
+
+--------------------------------------------------
+/PARAMETERS COMMAND
+--------------------------------------------------
+
+Keep /parameters in the config bot, but it must only configure parameters for the ORIGINAL Product Research Bot.
+
+Do not make the config bot interpret parameters using a separate engine.
+It must store them in a format compatible with the original Product Research Bot.
+
+First inspect the original bot and reuse its actual parameter schema if it already exists.
+
+--------------------------------------------------
+SCHEDULE / TIMEZONE
+--------------------------------------------------
+
+Keep the existing timezone, reminder time, and research time features in the config bot.
+
+The config bot must:
+- use my timezone
+- ask at reminder_time
+- trigger the original Product Research Bot at research_time
+
+--------------------------------------------------
+FINAL DELIVERABLE
+--------------------------------------------------
+
+Before making code changes, tell me:
+
+1. Which file contains the config bot scheduler
+2. Which file contains the original Product Research Bot entrypoint
+3. How you will trigger the original Product Research Bot
+4. How results will come back to the config bot
+5. Which files you will modify
+
+Then apply the minimal changes needed to make the config bot trigger the original Product Research Bot instead of doing research itself.

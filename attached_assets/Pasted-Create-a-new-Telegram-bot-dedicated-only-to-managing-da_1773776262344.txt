@@ -1,0 +1,209 @@
+Create a new Telegram bot dedicated only to managing daily product research configuration and triggering the research process.
+
+This bot is separate from the existing research bot. It only collects configuration, schedules the research run, and sends reports.
+
+The bot must run 24/7 on Replit Reserved VM.
+
+----------------------------------
+
+DAILY KEYWORD REQUEST
+
+At a configurable time every day (example: 21:00), the bot sends:
+
+"Send tomorrow's research keywords separated by commas."
+
+Example user response:
+
+portable blender, car vacuum, posture corrector
+
+After receiving the keywords, the bot must ask:
+
+"How many total ads do you want to extract?"
+
+Example:
+
+User: 40
+
+The bot then saves the configuration.
+
+----------------------------------
+
+CONFIRMATION MESSAGE
+
+After configuration is saved, the bot replies with a summary:
+
+Tomorrow’s research configuration:
+
+Keywords:
+- portable blender
+- car vacuum
+- posture corrector
+
+Total ads target: 40
+
+----------------------------------
+
+REMINDER SYSTEM
+
+If the user does not respond to the first message:
+
+Send reminder every 5 minutes.
+
+Reminder message:
+
+"Reminder: please send tomorrow’s research keywords."
+
+Maximum reminders: 5.
+
+If the user still does not respond after 5 reminders:
+
+Load yesterday’s configuration automatically.
+
+Send message:
+
+"No response received. Using yesterday’s keywords configuration."
+
+----------------------------------
+
+DATA STORAGE
+
+Store configuration in persistent storage.
+
+Example structure:
+
+{
+  "date": "2026-03-19",
+  "keywords": [
+    "portable blender",
+    "car vacuum",
+    "posture corrector"
+  ],
+  "total_ads_target": 40
+}
+
+----------------------------------
+
+NEXT-DAY AUTOMATIC RESEARCH
+
+At another configurable time (example: 09:00), the bot must trigger the research process automatically.
+
+Process:
+
+1. Start research.
+2. Loop through keywords sequentially.
+3. Extract ads/products for each keyword.
+4. Stop when the total_ads_target is reached.
+
+Example:
+
+Target: 40 ads
+
+portable blender → 15 ads  
+car vacuum → 13 ads  
+posture corrector → 12 ads  
+
+Total = 40 → stop extraction.
+
+----------------------------------
+
+FINAL REPORT
+
+When the research process finishes, the bot sends a report message.
+
+Example:
+
+Daily Research Report
+
+Keywords used:
+portable blender
+car vacuum
+posture corrector
+
+Total ads requested: 40
+
+Results:
+
+portable blender → 15
+car vacuum → 13
+posture corrector → 12
+
+Duplicates skipped: 8
+Total collected: 40
+Execution time: 16 minutes
+
+----------------------------------
+
+CONVERSATION STATES
+
+Track conversation state:
+
+waiting_for_keywords
+waiting_for_total_ads
+
+Ensure state persists between messages.
+
+----------------------------------
+
+VALIDATION
+
+Rules:
+
+- keywords must be separated by commas
+- remove duplicates
+- validate total_ads_target is a number
+- allow /cancel command
+
+----------------------------------
+
+SCHEDULER
+
+Add internal scheduler.
+
+Example schedule:
+
+21:00 → ask for tomorrow keywords
+09:00 → start research job
+
+Scheduler must support timezone configuration.
+
+Example config file:
+
+schedule_config.json
+
+{
+  "timezone": "Asia/Dubai",
+  "keyword_request_time": "21:00",
+  "research_run_time": "09:00"
+}
+
+Use a scheduling library:
+
+Node.js → node-cron  
+Python → APScheduler
+
+----------------------------------
+
+LOGGING
+
+Log events:
+
+daily request sent
+reminder sent
+keywords received
+ads target received
+configuration saved
+research started
+research finished
+report sent
+errors
+
+----------------------------------
+
+IMPORTANT
+
+Do not modify the existing research bot logic.
+
+This bot only:
+- collects configuration
+- triggers research
+- sends daily reports.

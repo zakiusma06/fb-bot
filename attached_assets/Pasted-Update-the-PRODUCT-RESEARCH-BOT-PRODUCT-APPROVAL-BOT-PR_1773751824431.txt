@@ -1,0 +1,187 @@
+Update the PRODUCT RESEARCH BOT, PRODUCT APPROVAL BOT, PRICING / PRODUCT CREATION BOT, and GOOGLE SHEETS STRUCTURE with the following corrections.
+
+Do NOT redesign the current architecture. Only apply these changes.
+
+---------------------------------------------------
+1. FIX MANUAL KEYWORD FLOW
+---------------------------------------------------
+
+Current problem:
+When I click "Manual Keywords", the bot still gives suggestions.
+
+Required behavior:
+When I click "Manual Keywords", the bot must immediately let me type my own keyword(s).
+
+It must NOT generate suggestions.
+It must NOT show suggested keywords.
+It must NOT show ranked keywords.
+
+Correct flow:
+
+Button clicked:
+MANUAL KEYWORDS
+
+Bot response:
+"Enter one or more keywords separated by commas"
+
+Then wait for my text input.
+
+---------------------------------------------------
+2. REMOVE CATEGORY EVERYWHERE
+---------------------------------------------------
+
+Remove CATEGORY completely from the system.
+
+This means:
+
+- remove CATEGORY from all bots
+- remove CATEGORY from all Google Sheets tabs
+- remove CATEGORY from product research bot
+- remove CATEGORY from product approval bot
+- remove CATEGORY filters
+- remove CATEGORY display in Telegram messages
+- remove CATEGORY detection with AI
+
+Do not keep CATEGORY anywhere.
+
+---------------------------------------------------
+3. FIX WEIGHT EXTRACTION
+---------------------------------------------------
+
+Current problem:
+Weight is not being detected correctly.
+
+Required behavior:
+
+The bot must open the generated sourcing link from Fatkun, for example:
+
+https://www.fatkun.net/image-search/red?id=613619987215
+
+Then:
+
+1. wait until this Fatkun redirect page automatically redirects to the real 1688 product link
+2. after the redirect finishes and the final 1688 product page is loaded
+3. click the tab/section:
+   Packing
+4. after Packing is opened, extract the weight from:
+   重量(g)
+
+Example:
+重量(g)
+500
+
+Save:
+WEIGHT GRAM = 500
+
+Important rules:
+
+- do NOT try to extract weight before the redirect completes
+- do NOT try to extract weight from the Fatkun redirect page itself
+- only extract weight after the final 1688 page is fully loaded
+- after page load, explicitly click "Packing"
+- then extract the numeric grams value from 重量(g)
+
+If not found:
+leave WEIGHT GRAM empty
+do NOT guess
+
+---------------------------------------------------
+4. KEEP SOURCING FLOW AS IT IS
+---------------------------------------------------
+
+Do not change the existing sourcing image-search logic.
+
+Only improve the weight extraction by:
+- following the Fatkun redirect properly
+- waiting for final 1688 page load
+- opening Packing
+- reading 重量(g)
+
+---------------------------------------------------
+5. UPDATE GOOGLE SHEETS STRUCTURE
+---------------------------------------------------
+
+Keep these sourcing-related fields:
+
+SOURCING PRICE USD
+SOURCING URL
+WEIGHT GRAM
+HAS VARIANTS
+
+Remove CATEGORY from all tabs.
+
+Apply this to all tabs:
+
+PENDING
+APPROVED
+DISAPPROVED
+READY FOR ADS
+ADS RUNNING
+WINNER
+LOSER
+
+When rows move between tabs, these fields must move with the row.
+
+---------------------------------------------------
+6. UPDATE PRODUCT APPROVAL BOT
+---------------------------------------------------
+
+Remove CATEGORY from approval bot completely.
+
+When showing a product for review, display only:
+
+- Product Page URL
+- Ads Library Creative URL
+- Keyword
+- Sourcing Price USD
+- Supplier URL
+- Weight Gram
+- Variants (YES / NO)
+
+Buttons remain the same.
+
+---------------------------------------------------
+7. UPDATE APPROVAL BOT FILTERS
+---------------------------------------------------
+
+Remove CATEGORY filter completely.
+
+Keep only these optional filters:
+
+- SOURCING PRICE USD ranges
+- VARIANTS FILTER
+  - WITH VARIANTS
+  - NO VARIANTS
+- KEYWORD ranking by approval rate
+- NO FILTER option
+
+All filters must remain optional.
+User can choose one, many, or skip all.
+
+---------------------------------------------------
+8. KEEP PRICING BOT LOGIC
+---------------------------------------------------
+
+Keep the current pricing and product creation bot logic exactly as it is.
+
+Do not redesign it.
+
+Only keep showing:
+
+- SOURCING PRICE USD
+- WEIGHT GRAM
+- SUGGESTED SELLING PRICE
+
+with the existing formula logic already requested earlier.
+
+---------------------------------------------------
+9. IMPORTANT IMPLEMENTATION RULES
+---------------------------------------------------
+
+- Manual Keywords must allow direct typing only
+- Do not show suggestions in Manual Keywords mode
+- Remove CATEGORY from everywhere
+- Weight extraction must follow the Fatkun redirect to final 1688 page
+- Weight extraction must click Packing after page load
+- Weight must be read from 重量(g)
+- Do not guess missing weight

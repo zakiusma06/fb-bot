@@ -1,0 +1,309 @@
+I want to restructure the middle workflow only.
+
+IMPORTANT:
+Do NOT modify the first bot (PRODUCT RESEARCH BOT).
+Do NOT modify CREATIVE HUNTER / CREATIVE BOOSTER BOT.
+Only modify and merge the middle bot logic.
+
+==================================================
+1. BOTS THAT MUST STAY UNCHANGED
+==================================================
+
+Do NOT touch:
+1. PRODUCT RESEARCH BOT
+2. CREATIVE HUNTER / CREATIVE BOOSTER BOT
+
+PRODUCT RESEARCH BOT must stay exactly as it is now.
+It still extracts products to:
+- PENDING sheet
+
+CREATIVE HUNTER / CREATIVE BOOSTER BOT must also stay exactly as it is now.
+Do not change its current behavior, source logic, buttons, or flow.
+
+==================================================
+2. WHAT MUST BE MERGED
+==================================================
+
+Merge these into one single bot/workflow:
+- APPROVAL BOT
+- PRICING BOT
+- PRODUCT CREATION (Shopify creation) flow
+
+So the new APPROVAL BOT must now include:
+1. product approval review
+2. pricing inputs / pricing suggestion
+3. Shopify product creation
+4. final product approval
+
+==================================================
+3. NEW APPROVAL BOT FLOW
+==================================================
+
+The new APPROVAL BOT must read products from:
+- PENDING sheet
+
+It must show me these product fields:
+- ADSLIBRARY PRODUCT LINK (AL PRODUCT LINK)
+- ADS LIBRARY MEDIA (AL MEDIA)
+- SOURCING LINK (SC LINK)
+- WEIGHT
+- SOURCING PRICE (SC PRICE)
+
+It must also support editing:
+- SC PRICE
+- WEIGHT
+
+And it must show a suggested SELLING PRICE using the same formula I already gave before.
+
+IMPORTANT:
+The suggested SELLING PRICE must update instantly whenever:
+- SC PRICE changes
+- WEIGHT changes
+
+No manual refresh.
+It must stay synchronized live.
+
+==================================================
+4. REQUIRED ACTIONS / BUTTONS IN APPROVAL BOT
+==================================================
+
+The APPROVAL BOT product screen must include these actions:
+
+- DISAPPROVE
+- EDIT SC PRICE
+- EDIT WEIGHT
+- ENTER SELLING PRICE
+- ENTER COMPARE AT PRICE
+- PREAPPROVE
+- SKIP / NEXT PRODUCT
+
+Behavior:
+
+DISAPPROVE:
+- move product directly to DISAPPROVED sheet
+
+EDIT SC PRICE:
+- save new sourcing price immediately to sheet
+- recalculate suggested selling price immediately
+
+EDIT WEIGHT:
+- save new weight immediately to sheet
+- recalculate suggested selling price immediately
+
+ENTER SELLING PRICE:
+- save immediately to sheet
+
+ENTER COMPARE AT PRICE:
+- save immediately to sheet
+
+SKIP / NEXT PRODUCT:
+- keep product in PENDING
+- show next product
+
+==================================================
+5. IMPORTANT VALIDATION BEFORE PREAPPROVE
+==================================================
+
+PREAPPROVE is a button/action only.
+It is NOT a new status.
+It is NOT a new sheet.
+
+Do NOT create PREAPPROVED status.
+Do NOT create PREAPPROVED sheet.
+
+PREAPPROVE must be blocked unless both fields exist:
+- SELLING PRICE
+- COMPARE AT PRICE
+
+If one is missing, do not continue.
+Show a clear message like:
+"You must enter SELLING PRICE and COMPARE AT PRICE before preapproving."
+
+==================================================
+6. WHAT PREAPPROVE MUST DO
+==================================================
+
+When I click PREAPPROVE:
+1. ask for confirmation
+2. create the Shopify product using the existing Shopify creation logic I already described before
+3. wait for successful creation
+4. get the Shopify external product page URL
+5. show me ONLY the external product page link
+
+Important:
+After Shopify creation, do NOT show a big full summary block.
+Show only the external Shopify product page link.
+
+Example:
+- Shopify product created successfully
+- Product page: https://yourstore.com/products/...
+
+==================================================
+7. ACTIONS AFTER SHOPIFY PRODUCT CREATION
+==================================================
+
+After Shopify product creation, show these buttons:
+
+- APPROVE PRODUCT
+- REGENERATE
+- SKIP
+
+APPROVE PRODUCT:
+- set STATU = APPROVED
+- move row from PENDING to APPROVED sheet
+
+REGENERATE:
+- keep the same old regenerate capabilities as before
+- allow:
+  - regenerate title
+  - regenerate description
+  - delete image 1
+  - delete image 2
+  - delete image 3
+  - delete image 4
+  - delete image 5
+  - delete image 6
+- after regeneration/update, keep showing the external Shopify product page link
+- do NOT auto-approve after regenerate
+
+SKIP:
+- do not approve
+- keep the product in PENDING
+- keep saved values
+- move on to next product
+
+==================================================
+8. IMPORTANT DATA PERSISTENCE RULE
+==================================================
+
+Every edit in APPROVAL BOT must save immediately to the sheet.
+
+That means:
+- SC PRICE edit => save immediately
+- WEIGHT edit => save immediately
+- SELLING PRICE entry => save immediately
+- COMPARE AT PRICE entry => save immediately
+
+Do not wait until final approval to save.
+
+This is very important.
+
+==================================================
+9. IMPORTANT SHEET / STATUS SIMPLIFICATION
+==================================================
+
+Do not create extra temporary sheets for this middle process.
+Keep the product in PENDING until final product approval.
+
+Only move it out of PENDING when:
+- DISAPPROVE => move to DISAPPROVED
+- APPROVE PRODUCT => move to APPROVED
+
+So the middle workflow must stay inside PENDING until the final decision.
+
+==================================================
+10. IMPORTANT ERROR HANDLING
+==================================================
+
+If Shopify product creation fails:
+- do NOT lose the product
+- keep it in PENDING
+- save error info in a field like LAST_ERROR or PRODUCT_CREATION_ERROR
+- allow retry later
+
+Do not move it to APPROVED if Shopify creation failed.
+
+==================================================
+11. IMPORTANT: DO NOT BREAK CREATIVE HUNTER
+==================================================
+
+CREATIVE HUNTER / CREATIVE BOOSTER must remain separate and unchanged.
+
+The only assumption is:
+- it will continue to work after products are in APPROVED
+
+But do not rewrite its current logic.
+
+==================================================
+12. DESIRED FINAL WORKFLOW
+==================================================
+
+The workflow must become:
+
+1. PRODUCT RESEARCH BOT (unchanged)
+- extracts product to PENDING
+
+2. APPROVAL BOT (merged bot)
+- loads PENDING products
+- lets me review product
+- lets me edit weight and sourcing price
+- instantly updates suggested selling price
+- lets me enter selling price and compare at price
+- PREAPPROVE triggers Shopify product creation
+- after creation, shows only external Shopify product page link
+- then I can:
+  - APPROVE PRODUCT => move to APPROVED
+  - REGENERATE => edit Shopify product assets/content
+  - SKIP => leave in PENDING and continue later
+
+3. CREATIVE HUNTER / CREATIVE BOOSTER (unchanged)
+- continues from APPROVED as before
+
+==================================================
+13. IMPLEMENTATION REQUIREMENTS
+==================================================
+
+Please update:
+- approval bot logic
+- pricing logic
+- Shopify creation integration inside approval bot
+- sheet persistence logic
+- button rendering / action flow for approval bot
+- validation rules before preapprove
+- final approve behavior
+- skip behavior
+- error handling for Shopify creation
+
+Do NOT update:
+- product research bot
+- creative hunter / booster bot
+
+==================================================
+14. AFTER IMPLEMENTATION
+==================================================
+
+After you finish, tell me clearly:
+1. which files you changed
+2. which files you intentionally did NOT change
+3. how approval bot now works step by step
+4. how immediate saving works
+5. how Shopify creation is triggered
+6. what happens on Shopify creation failure
+7. what sheet transitions now exist
+One more important requirement for the merged APPROVAL BOT:
+
+It must also include the duplicate product detection feature that already exists in the project, the one comparing candidate products with existing Shopify products.
+
+IMPORTANT:
+- do NOT rewrite that duplicate detection logic
+- do NOT change the existing duplicate comparison function
+- do NOT edit its internal behavior unless absolutely necessary for wiring/integration
+- just integrate/use the existing function inside the new APPROVAL BOT flow
+
+Required behavior:
+- when APPROVAL BOT loads a product from PENDING, it should also run/check the existing duplicate-detection-against-Shopify logic
+- if duplicate or likely duplicate is detected, show me that information clearly in the product review screen
+- keep the existing duplicate logic as-is, just surface its result inside APPROVAL BOT
+
+So the merged APPROVAL BOT must now include:
+1. product review from PENDING
+2. duplicate check using the already-existing Shopify duplicate detection function
+3. pricing inputs and live selling-price suggestion
+4. Shopify product creation
+5. final approval
+
+Again:
+Use the existing duplicate function.
+Do not rebuild it.
+Just connect it into the APPROVAL BOT UI/flow.Do not give me a vague answer.
+Implement it exactly.

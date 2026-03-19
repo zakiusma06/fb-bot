@@ -1,0 +1,128 @@
+You did NOT implement the required APPROVE flow in CREATIVE HUNTER / CREATIVE BOOSTER.
+
+Current problem:
+- the bot only shows:
+  - Video
+  - Image
+  - Both
+  - Next Product
+- it does NOT show the APPROVE button
+- so it also does NOT show the confirmation options after clicking APPROVE
+
+This is wrong and does not match the requested workflow.
+
+==================================================
+REQUIRED FIX
+==================================================
+
+In CREATIVE HUNTER / CREATIVE BOOSTER product view, for every product loaded from PREAPPROVED, you must ALWAYS show these actions together:
+
+1. Video
+2. Image
+3. Both
+4. APPROVE
+5. Next Product
+
+Important:
+- APPROVE must be visible immediately on the product screen
+- do NOT hide APPROVE behind another menu
+- do NOT remove Video / Image / Both
+- do NOT remove Next Product
+- APPROVE must exist at the same time as the other buttons
+
+==================================================
+APPROVE BUTTON REQUIRED BEHAVIOR
+==================================================
+
+When I click APPROVE, do NOT instantly finalize.
+
+Instead, open a confirmation menu based on how many creatives currently exist / are available for that product.
+
+If the product currently has 1 creative:
+- Approve with 1 creative
+- Keep looking for creatives
+
+If 2 creatives:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Keep looking for creatives
+
+If 3 creatives:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Approve with 3 creatives
+- Keep looking for creatives
+
+If 4 creatives:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Approve with 3 creatives
+- Approve with 4 creatives
+- Keep looking for creatives
+
+If 5 creatives:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Approve with 3 creatives
+- Approve with 4 creatives
+- Approve with 5 creatives
+- Keep looking for creatives
+
+The number of approval options must be dynamic and depend on the actual number of creatives currently attached to the product.
+
+==================================================
+FINALIZE LOGIC
+==================================================
+
+If I choose "Approve with X creatives":
+1. keep/select exactly X creatives
+2. set STATU = APPROVED
+3. move the row from PREAPPROVED sheet to APPROVED sheet
+
+If I choose "Keep looking for creatives":
+- do NOT approve
+- do NOT move sheet
+- return to the normal creative search flow
+
+==================================================
+IMPORTANT UI FIX
+==================================================
+
+Right now the product card UI is incomplete.
+
+The product action keyboard / buttons for PREAPPROVED products must be updated so the first screen includes APPROVE.
+
+Expected product screen buttons:
+
+[ Video ] [ Image ] [ Both ]
+[ APPROVE ] [ Next Product ]
+
+Or any similar layout, but APPROVE must be present on the first screen.
+
+==================================================
+IMPORTANT IMPLEMENTATION NOTE
+==================================================
+
+You likely updated backend logic for PREAPPROVED but did NOT update the actual button rendering / keyboard generation function for the CREATIVE HUNTER product card.
+
+Please fix the real UI/action generation layer, not only backend handlers.
+
+Check and update all places responsible for:
+- rendering buttons / keyboard
+- handling product action commands
+- handling APPROVE callback/action
+- opening dynamic confirmation options
+- finalizing with chosen creative count
+
+==================================================
+WHAT I WANT FROM YOU NOW
+==================================================
+
+Please fix this now and then tell me exactly:
+1. which file renders the CREATIVE HUNTER buttons
+2. what you changed in that file
+3. which file handles the APPROVE action
+4. how the confirmation options are generated dynamically
+5. how final approval moves PREAPPROVED -> APPROVED
+
+Do not tell me it is already implemented unless the APPROVE button is visible on the first product screen.

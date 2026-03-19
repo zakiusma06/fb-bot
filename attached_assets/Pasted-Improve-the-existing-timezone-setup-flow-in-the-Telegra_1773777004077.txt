@@ -1,0 +1,154 @@
+Improve the existing timezone setup flow in the Telegram bot.
+
+I want the timezone setup to also continue directly into schedule setup.
+
+Do not rebuild the bot. Only extend the current bot.
+
+----------------------------------
+
+NEW /timezone FLOW
+
+When I use /timezone, the bot must show 3 options:
+
+1. Use my phone location
+2. Choose from list
+3. Enter manually
+
+----------------------------------
+
+OPTION 1 — USE MY PHONE LOCATION
+
+When I choose "Use my phone location":
+
+- bot asks me to share my location using a Telegram location button
+- after receiving latitude/longitude, detect my timezone automatically in IANA format
+- example: Asia/Makassar
+- save this timezone temporarily first
+
+Then immediately continue the setup flow:
+
+Bot:
+"Timezone detected: Asia/Makassar"
+
+Then ask:
+"Now send the daily reminder time in HH:MM format."
+
+Example:
+21:30
+
+After I send it and it is valid, ask:
+"Now send the daily research start time in HH:MM format."
+
+Example:
+09:00
+
+After I send it and it is valid:
+- save timezone
+- save reminder time
+- save research time
+- update scheduler immediately
+
+Then send confirmation:
+
+Settings saved successfully.
+
+Timezone: Asia/Makassar
+Reminder time: 21:30
+Research time: 09:00
+
+----------------------------------
+
+OPTION 2 — CHOOSE FROM LIST
+
+If I choose "Choose from list":
+
+- show a list of common timezones as inline buttons or reply keyboard
+- when I select one, do the same next steps:
+  1. ask reminder time
+  2. ask research start time
+  3. save all settings
+  4. update scheduler immediately
+
+----------------------------------
+
+OPTION 3 — ENTER MANUALLY
+
+If I choose "Enter manually":
+
+- ask me to type timezone manually
+- validate it as a real IANA timezone
+- once valid, continue with:
+  1. ask reminder time
+  2. ask research start time
+  3. save all settings
+  4. update scheduler immediately
+
+----------------------------------
+
+NEW STATES TO ADD
+
+Add these conversation states if needed:
+
+- waiting_for_timezone_choice
+- waiting_for_location_timezone
+- waiting_for_manual_timezone
+- waiting_for_reminder_time
+- waiting_for_research_time
+
+Do not break the existing states for:
+- waiting_for_keywords
+- waiting_for_total_ads
+
+----------------------------------
+
+VALIDATION
+
+- timezone must be valid IANA timezone
+- reminder time must be valid HH:MM 24-hour format
+- research time must be valid HH:MM 24-hour format
+- if invalid, show a clear error and ask again
+
+----------------------------------
+
+PERSISTENT STORAGE
+
+Save settings in persistent storage like:
+
+{
+  "timezone": "Asia/Makassar",
+  "reminder_time": "21:30",
+  "research_time": "09:00"
+}
+
+----------------------------------
+
+SCHEDULER RULE
+
+When any of these values are changed:
+- timezone
+- reminder time
+- research time
+
+The scheduler must update immediately without requiring a bot restart, if possible.
+
+----------------------------------
+
+/SETTINGS COMMAND
+
+The /settings command must show:
+
+Current settings:
+Timezone: Asia/Makassar
+Reminder time: 21:30
+Research time: 09:00
+
+----------------------------------
+
+IMPORTANT
+
+Do not modify the current working keyword collection flow, reminder retry flow, fallback-to-yesterday logic, research execution logic, or reporting logic.
+
+Only extend the bot so timezone setup can also guide me through choosing:
+- reminder time
+- research start time
+in the same flow.

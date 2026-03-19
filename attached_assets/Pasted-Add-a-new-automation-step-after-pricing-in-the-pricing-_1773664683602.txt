@@ -1,0 +1,227 @@
+Add a new automation step after pricing in the pricing bot.
+
+Goal:
+When a product is APPROVED and pricing is entered, automatically create a Shopify product page as a DRAFT, send a preview link in Telegram for review, and only publish it after manual approval.
+
+--------------------------------------------------
+
+GOOGLE SHEET STRUCTURE
+
+The APPROVED sheet page contains these columns:
+
+SKU
+KEYWORD
+URL PRODUCT
+ADS LIBRARY MEDIA URL
+NOTE
+PRICE
+COMPARE AT PRICE
+URL LANDING PAGE
+PRODUCT NAME
+STATU
+
+Rules:
+
+Do not remove any columns.
+
+--------------------------------------------------
+
+TRIGGER CONDITION
+
+When the pricing bot saves pricing and the following conditions are true:
+
+STATU = APPROVED
+PRICE is not empty
+COMPARE AT PRICE is not empty
+
+Then start the Shopify product creation pipeline automatically.
+
+--------------------------------------------------
+
+STEP 1 — SCRAPE PRODUCT DATA
+
+Visit the competitor product page using:
+
+URL PRODUCT
+
+Extract:
+
+- product title
+- product description
+- product images
+
+Images must be taken directly from the competitor product page.
+
+Important image rules:
+
+- do NOT modify images
+- do NOT clean images
+- do NOT use Facebook thumbnails
+- download images directly from the product page
+
+Image count rules:
+
+minimum images: 2
+maximum images: 5
+
+If more than 5 images exist, keep only the first 5.
+
+--------------------------------------------------
+
+STEP 2 — GENERATE CLEAN PRODUCT DATA WITH AI
+
+Generate a clean Shopify product title and short description.
+
+Title rules:
+
+- pure descriptive title
+- no brand names
+- clear product function
+- 5–10 words
+- French language
+
+Example format:
+
+"Détecteur d’Angle Numérique Magnétique"
+
+Description rules:
+
+Use short structured description:
+
+1. short benefit introduction
+2. short explanation of problem
+3. how the product solves it
+4. key benefits
+5. short closing line
+
+Keep description concise.
+
+--------------------------------------------------
+
+STEP 3 — CREATE SHOPIFY PRODUCT
+
+Use Shopify Admin API.
+
+Create product with:
+
+status = draft
+
+Fields to send:
+
+title = AI generated title
+body_html = AI generated description
+price = PRICE column
+compare_at_price = COMPARE AT PRICE column
+images = downloaded images (2–5)
+
+Also generate a clean product handle from the title.
+
+Example:
+
+detecteur-angle-numerique-magnetique
+
+--------------------------------------------------
+
+STEP 4 — GENERATE STORE PREVIEW LINK
+
+After creating the draft product, generate a preview link so the product page can be reviewed in the storefront.
+
+Example format:
+
+https://yourstore.myshopify.com/products/{product-handle}?preview=true
+
+Send this preview link to Telegram.
+
+--------------------------------------------------
+
+STEP 5 — TELEGRAM REVIEW MESSAGE
+
+Send a message in the pricing bot:
+
+Example:
+
+Product page generated
+
+Title:
+{generated title}
+
+Preview link:
+{preview link}
+
+Buttons:
+
+PUBLISH
+SKIP
+
+--------------------------------------------------
+
+STEP 6 — PUBLISH PRODUCT
+
+If the user presses PUBLISH:
+
+1. change Shopify product status from draft → active
+
+2. update the Google Sheet row with:
+
+PRODUCT NAME = generated title
+
+URL LANDING PAGE = 
+https://yourstore.myshopify.com/products/{product-handle}
+
+STATU = READY FOR ADS
+
+--------------------------------------------------
+
+STEP 7 — SKIP
+
+If the user presses SKIP:
+
+- keep product as draft
+- do not update URL LANDING PAGE
+- keep STATU = APPROVED
+
+--------------------------------------------------
+
+IMPORTANT RULES
+
+Do not change existing bots.
+
+This automation must integrate with the existing pricing bot.
+
+Only trigger when pricing is entered.
+
+Do not insert URL LANDING PAGE into the sheet until the product is published.
+
+Keep all existing columns in the sheet.
+
+Use the same Google Sheets file.
+
+Ensure image count stays between 2 and 5.
+
+Ensure product is created as draft before review.
+
+--------------------------------------------------
+
+FINAL WORKFLOW
+
+APPROVED product
+↓
+pricing entered
+↓
+bot scrapes competitor page
+↓
+AI generates title + description
+↓
+images downloaded (2–5)
+↓
+Shopify draft product created
+↓
+Telegram preview link sent
+↓
+user presses PUBLISH
+↓
+product goes live
+↓
+sheet updated
+↓
+STATU = READY FOR ADS

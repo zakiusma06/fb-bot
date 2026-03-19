@@ -1,0 +1,213 @@
+We need to improve the Facebook Ads Bot with two features:
+
+1) manual campaign control inside /stats
+2) configurable campaign judgment rules
+
+IMPORTANT:
+Do not modify the current launch flow.
+Do not change how campaigns are created.
+Only add manual controls and editable rules.
+
+==================================================
+1. /stats MUST ALLOW MANUAL CONTROL
+==================================================
+
+The command:
+
+/stats
+
+must display all campaigns currently in the ADS RUNNING sheet.
+
+For each campaign show:
+
+SKU
+Campaign Name
+Spend
+Results
+Cost per result
+Status
+
+Below each campaign show buttons:
+
+STOP CAMPAIGN
+MARK WINNER
+MARK LOSER
+KEEP RUNNING
+
+--------------------------------------------------
+STOP CAMPAIGN behavior
+--------------------------------------------------
+
+STOP CAMPAIGN must NOT automatically mark the campaign as LOSER.
+
+When STOP CAMPAIGN is clicked:
+
+1. Pause the campaign via Meta API
+2. Then ask the user to classify the campaign.
+
+Show options:
+
+MARK WINNER
+MARK LOSER
+
+--------------------------------------------------
+Classification behavior
+--------------------------------------------------
+
+If user selects:
+
+MARK WINNER
+→ pause campaign (if not already paused)
+→ move row from ADS RUNNING → WINNER
+→ set STATU = WINNER
+→ then ask if user wants to add a NOTE
+
+MARK LOSER
+→ pause campaign (if not already paused)
+→ move row from ADS RUNNING → LOSER
+→ set STATU = LOSER
+→ then ask if user wants to add a NOTE
+
+--------------------------------------------------
+ADD NOTE
+--------------------------------------------------
+
+After MARK WINNER or MARK LOSER, ask:
+
+"Do you want to add a note?"
+
+Buttons:
+
+ADD NOTE
+SKIP
+
+If ADD NOTE is selected:
+
+1. ask user to enter a text message
+2. save that text in the NOTE column of the sheet
+
+The NOTE field is optional.
+
+Example /stats view:
+
+SKU: PRD-0026
+Spend: $4.32
+Results: 2
+CPR: $2.16
+
+Buttons:
+
+STOP CAMPAIGN
+MARK WINNER
+MARK LOSER
+KEEP RUNNING
+
+==================================================
+2. CONFIGURABLE CAMPAIGN JUDGMENT RULES
+==================================================
+
+Campaign judgment rules must NOT be hardcoded.
+
+Create a new command:
+
+/rules
+
+This command allows the user to configure campaign rules.
+
+Rules must be stored in a configuration file or sheet (for example rules.json).
+
+--------------------------------------------------
+Rules that must be configurable
+--------------------------------------------------
+
+GLOBAL RULE
+
+If spend ≥ X AND results = 0
+→ stop campaign automatically
+
+Example default:
+
+GLOBAL_NO_RESULT_SPEND = 3
+
+--------------------------------------------------
+
+DAY 1 RULE
+
+After 24 hours:
+
+If cost_per_result > X
+→ mark campaign LOSER
+
+Example default:
+
+DAY1_CPR_LIMIT = 2
+
+--------------------------------------------------
+
+DAY 2 RULE
+
+After 48 hours:
+
+If cost_per_result < X
+→ mark campaign WINNER
+
+If cost_per_result ≥ X
+→ mark campaign LOSER
+
+Example default:
+
+DAY2_WINNER_CPR = 2
+
+==================================================
+3. /rules COMMAND INTERFACE
+==================================================
+
+When /rules is executed show current values:
+
+Global no-result spend limit: $3
+Day 1 CPR limit: $2
+Day 2 winner CPR threshold: $2
+
+Buttons:
+
+EDIT GLOBAL SPEND LIMIT
+EDIT DAY 1 CPR LIMIT
+EDIT DAY 2 CPR LIMIT
+
+User enters new value → bot saves configuration.
+
+==================================================
+4. CAMPAIGN MONITOR MUST USE THESE RULES
+==================================================
+
+The background monitoring system must read values from the saved configuration.
+
+Example logic:
+
+if spend ≥ GLOBAL_NO_RESULT_SPEND AND results = 0
+→ stop campaign
+
+if hours ≥ 24 AND CPR > DAY1_CPR_LIMIT
+→ LOSER
+
+if hours ≥ 48 AND CPR < DAY2_WINNER_CPR
+→ WINNER
+
+==================================================
+5. IMPORTANT
+==================================================
+
+Manual actions from /stats must override automatic rules.
+
+If the user presses KEEP RUNNING, the campaign must ignore automatic stopping until the next evaluation cycle.
+
+==================================================
+6. AFTER IMPLEMENTATION
+==================================================
+
+Explain:
+
+1. where rules are stored
+2. how /rules edits them
+3. how /stats buttons work
+4. how the monitor reads the rules

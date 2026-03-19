@@ -1,0 +1,158 @@
+Modify the research target logic of the Product Research Bot.
+
+Current behavior is incorrect.
+
+Right now the bot treats the requested ads/products number as a hard limit.
+
+Example:
+Target = 10
+Bot finds 18 valid products
+Bot only saves 10 and ignores the other 8.
+
+This is wrong.
+
+The requested number must be treated as a MINIMUM target, not a maximum limit.
+
+--------------------------------------------------
+
+NEW REQUIRED LOGIC
+
+1. The requested ads/products number is the minimum number of valid products that must be collected.
+
+Example:
+
+target = 10
+
+If the bot finds:
+
+8 valid products → continue researching until at least 10 are found.
+
+12 valid products → keep all 12.
+
+18 valid products → keep all 18.
+
+Never discard valid products just because the target has been reached.
+
+--------------------------------------------------
+
+2. Stop condition
+
+The research process should stop only when:
+
+- the bot has collected at least the target number
+AND
+- the current research batch has been fully processed
+
+Meaning:
+
+If the bot is already processing a batch of ads and finds additional valid products, it must keep them.
+
+Do not interrupt the batch and discard valid results.
+
+--------------------------------------------------
+
+3. Continue searching if target not reached
+
+If after filtering, clustering, and deduplication the number of valid products is still below target:
+
+Example:
+
+target = 10
+current valid = 6
+
+The bot must:
+
+- continue loading more ads
+- run the filtering pipeline again
+- repeat until valid products >= target
+
+--------------------------------------------------
+
+4. Example behavior
+
+Example A:
+
+target = 10
+
+batch results:
+- 30 ads found
+- 18 valid clusters
+
+Result:
+
+save all 18 products
+
+--------------------------------------------------
+
+Example B:
+
+target = 10
+
+batch results:
+- 30 ads found
+- 6 valid clusters
+
+Result:
+
+continue researching until at least 10 valid products are collected.
+
+--------------------------------------------------
+
+5. Do not discard valid products
+
+Any product that passes:
+
+- filtering
+- clustering
+- duplicate detection
+- sourcing validation
+
+must always be saved.
+
+Never discard a valid product due to target limits.
+
+--------------------------------------------------
+
+6. Logs
+
+Update logs so the user understands what is happening.
+
+Example logs:
+
+Target: 10 products
+
+Batch result:
+18 valid products found
+
+Saving all 18 products (target exceeded)
+
+or
+
+Target: 10 products
+
+Batch result:
+6 valid products found
+
+Continuing research to reach target...
+
+--------------------------------------------------
+
+7. Important constraint
+
+Do not change the existing research pipeline stages:
+
+- filtering
+- clustering
+- duplicate detection
+- sourcing
+- saving
+
+Only modify the stopping logic and target handling.
+
+The pipeline itself must remain exactly the same.
+
+--------------------------------------------------
+
+Goal:
+
+Target value represents the minimum number of products to collect, not the maximum.

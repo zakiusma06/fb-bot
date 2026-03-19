@@ -1,0 +1,199 @@
+You are improving an existing product research agent.
+
+The agent already has access to the user's Shopify store and can read products through the Shopify Admin API.
+
+Your task is to implement a **duplicate product detection system** so the agent avoids presenting products that already exist in the user's Shopify product list.
+
+The system must detect duplicates **instantly or in real time**, not through periodic background refresh.
+
+---
+
+1. SHOPIFY PRODUCT CACHE (REAL-TIME)
+
+At agent startup:
+
+Fetch all Shopify products using the Shopify Admin API.
+
+For each product store:
+
+* product_id
+* title
+* description (body_html cleaned to plain text)
+* handle
+* main_image_url
+* other_image_urls
+
+Then compute:
+
+* perceptual image hashes (pHash or dHash)
+
+Store everything in a **local in-memory cache** called:
+
+shopify_products_cache
+
+Example record:
+
+{
+id: product_id,
+title: "...",
+description: "...",
+image_hashes: ["hash1","hash2","hash3"]
+}
+
+The cache should load **once at startup** and allow **instant lookups**.
+
+---
+
+2. INSTANT CACHE UPDATE (NO 15-MINUTE REFRESH)
+
+Do NOT rely on timed refresh like every 15 minutes.
+
+Instead update the cache **immediately when Shopify products change**.
+
+Use one of the following methods:
+
+Preferred method:
+Shopify Webhooks
+
+Listen to:
+
+* products/create
+* products/update
+* products/delete
+
+When triggered:
+
+• recompute image hashes for that product
+• update the local cache immediately
+
+This ensures the duplicate detection database is always up to date **without polling**.
+
+---
+
+3. IMAGE HASH DUPLICATE CHECK (PRIMARY SIGNAL)
+
+When the agent discovers a new product:
+
+1. download the product image
+2. compute perceptual hash
+3. compare with hashes in shopify_products_cache
+
+Use Hamming distance.
+
+Rules:
+
+distance < 8 → strong match
+distance 8–12 → possible match
+
+Image similarity is the strongest duplicate signal.
+
+---
+
+4. TITLE SIMILARITY
+
+Normalize titles:
+
+* lowercase
+* remove punctuation
+* remove stop words
+
+Use fuzzy similarity.
+
+Rules:
+
+similarity > 70% → strong match
+similarity 50–70% → moderate match
+
+---
+
+5. DESCRIPTION SIMILARITY
+
+Clean HTML and compare text similarity.
+
+Use cosine similarity or fuzzy matching.
+
+Rules:
+
+similarity > 60% → strong match
+similarity 40–60% → moderate match
+
+---
+
+6. DUPLICATE RISK SCORE
+
+Combine signals:
+
+image strong match → +80
+image possible match → +50
+
+title strong match → +20
+title moderate match → +10
+
+description strong match → +20
+description moderate match → +10
+
+Decision:
+
+score ≥ 80 → DUPLICATE
+score 50–79 → POSSIBLE DUPLICATE
+score < 50 → NEW PRODUCT
+
+---
+
+7. UI BEHAVIOR
+
+If duplicate detected show:
+
+⚠️ This product may already exist in your Shopify store.
+
+Display:
+
+* matched Shopify product title
+* product image
+* similarity score
+* Shopify admin link
+
+Options:
+
+1. Skip product
+2. Open existing Shopify product
+3. Force approve
+
+---
+
+8. SKIP PRODUCT LOGIC
+
+If user clicks **Skip product**:
+
+* mark status = DISAPPROVED
+* move product to **Disapproved Products page**
+* store reason = "Duplicate detected with Shopify catalog"
+
+Do not allow the product to return to the approval queue.
+
+---
+
+9. PERFORMANCE REQUIREMENTS
+
+The system must operate **instantly**:
+
+* duplicate detection should take less than 200ms
+* image hashes must be cached
+* Shopify product cache must be stored in memory
+* webhooks must update cache in real time
+
+Do not re-fetch the entire Shopify catalog for every product check.
+
+---
+
+10. GOAL
+
+Detect duplicate products even when:
+
+* titles differ
+* product names are translated
+* descriptions are rewritten
+
+Image similarity must remain the primary detection method.
+
+The system should detect approximately **85–95% of duplicates already present in the Shopify catalog**, with real-time performance.

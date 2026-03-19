@@ -1,0 +1,104 @@
+Update the current working bot with these 3 important fixes.
+
+Do not break the current Telegram workflow or existing Google Sheets integration.
+
+--------------------------------------------------
+FIX 1: SKIP PRODUCTS WITH NO REAL PRODUCT PAGE URL
+
+New rule:
+If the bot cannot detect or resolve a real landing page / product page URL, it must SKIP the product completely.
+
+Meaning:
+- do not write the product to the sheet
+- do not continue clustering
+- do not continue sourcing/price logic
+- do not continue creative collection for that product
+
+Add logs like:
+- skipped product: no product page URL found
+
+--------------------------------------------------
+FIX 2: ADD KEYWORD USED TO GOOGLE SHEET
+
+I want the sheet to include the keyword used to find the product.
+
+Add a new column called:
+
+KEYWORD
+
+Update the Google Sheet structure to include it near the beginning, like this:
+
+SKU
+KEYWORD
+URL PRODUCT
+URL PRODUCT 2
+URL PRODUCT 3
+URL PRODUCT 4
+URL PRODUCT 5
+ADS LIBRARY MEDIA URL1
+ADS LIBRARY MEDIA URL2
+ADS LIBRARY MEDIA URL3
+ADS LIBRARY MEDIA URL4
+ADS LIBRARY MEDIA URL5
+NOTE
+PRICE
+COMPARE AT PRICE
+URL LANDING PAGE
+PRODUCT NAME
+STATU
+FB COST (DAY1)
+FB COST (TEST) DAY2
+
+The bot should fill KEYWORD with the keyword that was used to find the product cluster.
+
+If multiple expanded keywords were used, store the main keyword that led to the successful product cluster, or the best matched keyword.
+
+--------------------------------------------------
+FIX 3: FOR SOURCING PRICE, USE PRODUCT PAGE IMAGE, NOT FACEBOOK THUMBNAIL
+
+Current problem:
+The bot uses the Facebook Ads Library thumbnail for image search sourcing, and this sometimes gives wrong matches.
+
+New required logic:
+For sourcing price search (1688 image search), do NOT use the Facebook thumbnail as the primary image.
+
+Image priority must be:
+
+1. Download the main product image directly from the product page
+2. If the main image fails, try other product images from the product page
+3. If product page images cannot be downloaded, take a screenshot of the product from the product page
+4. Only if everything above fails, optionally use the Facebook thumbnail as last fallback
+
+Important:
+The sourcing search must use the cleanest product image possible from the actual product page.
+
+Implementation details:
+- When visiting the landing page, extract the main product image URL
+- Download that image locally for sourcing use
+- If image download fails, try alternate product images from the page
+- If all image downloads fail, take a screenshot of the visible product section from the product page
+- Use that downloaded image or screenshot to perform the 1688 image search
+
+Add logs like:
+- downloaded main product image for sourcing
+- fallback to alternate product image
+- fallback to screenshot for sourcing
+- skipped Facebook thumbnail because product page image available
+
+--------------------------------------------------
+IMPORTANT
+
+Do not break:
+- /start
+- /extract
+- /cancel
+- /status
+
+Keep the current bot working.
+
+Only implement these improvements:
+1. skip products with no product page
+2. add KEYWORD column to the sheet
+3. use product-page image or screenshot for sourcing instead of Facebook thumbnail
+
+Also update README/comments if needed.

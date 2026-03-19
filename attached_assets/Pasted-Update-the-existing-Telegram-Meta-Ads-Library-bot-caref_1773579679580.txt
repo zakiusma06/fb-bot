@@ -1,0 +1,272 @@
+Update the existing Telegram Meta Ads Library bot carefully without breaking the current working Telegram flow.
+
+The bot already works and writes to Google Sheets.
+Now fix and improve the extraction logic.
+
+IMPORTANT CURRENT PROBLEMS TO FIX
+
+PROBLEM 1:
+The bot is not filling product page URLs.
+I want the bot to VISIT the ad, resolve/open the destination landing page, and save the real product/landing page URL into the sheet.
+The URL PRODUCT fields must contain actual product page / landing page URLs.
+
+PROBLEM 2:
+The bot is filling Ads Library media URLs with repeated or same-creative results.
+I do NOT want the same creative repeated.
+The ADS LIBRARY MEDIA URL fields must contain different creatives for the same product cluster when possible.
+
+--------------------------------------------------
+NEW GOOGLE SHEET STRUCTURE
+
+Use exactly these columns in this exact order:
+
+SKU
+URL PRODUCT
+URL PRODUCT 2
+URL PRODUCT 3
+URL PRODUCT 4
+URL PRODUCT 5
+ADS LIBRARY MEDIA URL1
+ADS LIBRARY MEDIA URL2
+ADS LIBRARY MEDIA URL3
+ADS LIBRARY MEDIA URL4
+ADS LIBRARY MEDIA URL5
+NOTE
+PRICE
+COMPARE AT PRICE
+URL LANDING PAGE
+PRODUCT NAME
+STATU
+FB COST (DAY1)
+FB COST (TEST) DAY2
+
+Only fill these fields:
+
+SKU
+URL PRODUCT
+URL PRODUCT 2
+URL PRODUCT 3
+URL PRODUCT 4
+URL PRODUCT 5
+ADS LIBRARY MEDIA URL1
+ADS LIBRARY MEDIA URL2
+ADS LIBRARY MEDIA URL3
+ADS LIBRARY MEDIA URL4
+ADS LIBRARY MEDIA URL5
+NOTE
+
+Leave these EMPTY:
+
+PRICE
+COMPARE AT PRICE
+URL LANDING PAGE
+PRODUCT NAME
+STATU
+FB COST (DAY1)
+FB COST (TEST) DAY2
+
+--------------------------------------------------
+CORE LOGIC
+
+One row = one product cluster
+
+Workflow:
+
+1. Find an initial ad from Ads Library.
+2. Open the ad.
+3. Visit or resolve the destination landing page URL.
+4. Extract the REAL product page / landing page URL.
+5. Extract product clues from that page:
+   - page title
+   - product title
+   - H1/H2
+   - repeated keywords
+6. Use those extracted keywords to search again in Ads Library.
+7. Find other advertisers selling the same product.
+8. Build one product cluster.
+9. Save one final grouped row.
+
+--------------------------------------------------
+PRODUCT URL REQUIREMENTS
+
+The fields:
+
+URL PRODUCT
+URL PRODUCT 2
+URL PRODUCT 3
+URL PRODUCT 4
+URL PRODUCT 5
+
+must contain REAL landing page / product page URLs.
+
+This means:
+- the bot must actually visit or resolve the ad destination URL
+- the bot must not leave them blank if a landing page exists
+- the bot must store the final real page URL, not just internal ad link
+- if redirect happens, save the final resolved destination URL
+
+Rules:
+- minimum 1
+- maximum 5
+- prefer different advertisers
+- prefer different domains
+- avoid duplicates
+- do not store blank placeholders if a valid landing page was found
+
+If the current extraction method is failing, improve it by:
+- opening the ad details page more reliably
+- clicking/opening the CTA if needed
+- reading redirect target
+- saving final page URL after navigation settles
+
+--------------------------------------------------
+ADS LIBRARY MEDIA URL REQUIREMENTS
+
+The fields:
+
+ADS LIBRARY MEDIA URL1
+ADS LIBRARY MEDIA URL2
+ADS LIBRARY MEDIA URL3
+ADS LIBRARY MEDIA URL4
+ADS LIBRARY MEDIA URL5
+
+must contain DIFFERENT creatives for the same product cluster.
+
+IMPORTANT:
+They should NOT all be the same creative repeated.
+They do NOT need to come from the first ad only.
+The bot should search for OTHER creatives for the same product across different advertisers or different ads.
+
+Rules:
+- minimum 1
+- maximum 5
+- prefer different advertisers
+- prefer different creatives
+- avoid exact duplicate creative links
+- avoid repeated same media URL
+- avoid repeated same thumbnail if detectable
+- if direct media file URL is not available, use the best Ads Library ad/media link that represents that creative
+
+Creative diversity logic:
+Treat creatives as different if one or more of these differ:
+- media URL differs
+- ad library ad URL differs
+- thumbnail differs
+- advertiser differs
+- ad text differs significantly
+
+Do not fill all 5 with the same ad repeated.
+
+--------------------------------------------------
+CLUSTERING RULES
+
+Ads belong to the same product cluster if:
+- landing page titles are similar
+- extracted keywords overlap
+- product page content is similar
+- image similarity is high if implemented
+
+Use:
+1. normalized page/product title
+2. extracted landing page keywords
+3. landing page domain + path similarity
+4. image similarity if available
+
+--------------------------------------------------
+SKU RULE
+
+Generate SKU automatically:
+
+PRD-0001
+PRD-0002
+PRD-0003
+
+--------------------------------------------------
+NOTE FIELD
+
+Write a useful short summary like:
+- "4 product URLs found, 5 different creatives found"
+- "landing pages resolved successfully"
+- "clustered from 3 advertisers"
+
+--------------------------------------------------
+IMPORTANT FIXES TO IMPLEMENT
+
+Fix 1:
+Ensure real product page URLs are collected and written into URL PRODUCT columns.
+
+Fix 2:
+Ensure ADS LIBRARY MEDIA URL columns contain different creatives, not the same creative duplicated.
+
+Fix 3:
+When collecting cluster results, de-duplicate product URLs and creative URLs separately.
+
+--------------------------------------------------
+SEPARATE DEDUP RULES
+
+For product URLs:
+- normalize URLs
+- remove tracking params if helpful
+- avoid same final resolved URL twice
+- avoid same domain+path repeated if essentially same page
+
+For creative URLs:
+- avoid same media URL twice
+- avoid same ad library link twice
+- avoid same thumbnail twice if possible
+- avoid same advertiser + same creative combination twice
+
+--------------------------------------------------
+BOT FLOW
+
+Do NOT break Telegram commands:
+- /start
+- /extract
+- /cancel
+- /status
+
+Keep the same Telegram conversation flow.
+Only improve extraction, clustering, landing-page resolution, and sheet output.
+
+--------------------------------------------------
+OUTPUT EXAMPLE
+
+One row should look like this:
+
+SKU: PRD-0008
+
+URL PRODUCT: https://store-a.com/product-page
+URL PRODUCT 2: https://store-b.com/product-page
+URL PRODUCT 3: https://store-c.com/product-page
+
+ADS LIBRARY MEDIA URL1: https://www.facebook.com/ads/library/?id=111
+ADS LIBRARY MEDIA URL2: https://www.facebook.com/ads/library/?id=222
+ADS LIBRARY MEDIA URL3: https://www.facebook.com/ads/library/?id=333
+
+NOTE: 3 product URLs found, 3 different creatives found
+
+All remaining columns empty.
+
+--------------------------------------------------
+DEBUGGING / RELIABILITY
+
+Add logs for:
+- landing page resolved successfully
+- landing page failed
+- creative skipped because duplicate
+- product URL skipped because duplicate
+- cluster built successfully
+
+If fewer than 5 are found, still save the row as long as minimum 1 exists.
+
+--------------------------------------------------
+FINAL GOAL
+
+I want the bot to:
+1. find a product
+2. visit the product page and save the real product URL
+3. search again for the same product
+4. collect 1 to 5 real product page URLs from different advertisers
+5. collect 1 to 5 DIFFERENT creatives for that same product
+6. write one grouped row into Google Sheets
+7. leave pricing/test columns empty

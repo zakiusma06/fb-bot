@@ -1,0 +1,307 @@
+Build me an MVP Telegram bot in Python for product research using Meta Ads Library.
+
+Goal:
+Create a Telegram bot that guides me step by step through an extraction workflow, then runs a scraper on Meta Ads Library and saves the results into Google Sheets.
+
+This is MVP only.
+Do NOT build dashboards, product pages, ad launching, auto-learning, self-healing, or advanced admin panels.
+Focus only on:
+- Telegram conversational flow
+- AI keyword suggestions
+- Meta Ads Library extraction
+- filtering
+- deduplication
+- Google Sheets output
+
+Main user flow in Telegram:
+1. I send /extract
+2. Bot asks: how many products do you want to extract?
+3. I answer with a number, for example 20
+4. Bot asks for keywords
+5. Bot should offer AI keyword suggestions and also allow manual keywords
+6. Bot asks for countries
+7. Bot asks for media type
+8. Bot asks for active status
+9. Bot shows a summary and asks for confirmation
+10. If I confirm, bot runs the workflow
+11. Bot sends progress updates if possible
+12. Bot sends final summary when finished
+
+Telegram UX requirements:
+Use a conversation/wizard style flow.
+Use reply keyboards or inline buttons where helpful.
+Keep the flow beginner-friendly.
+
+Commands:
+- /start
+- /help
+- /extract
+- /cancel
+- /status
+
+Detailed Telegram flow:
+When user sends /extract:
+Step 1:
+Bot asks:
+"How many unique products do you want to extract?"
+
+Step 2:
+After receiving number, bot asks:
+"Do you want AI keyword suggestions or do you want to type your own keywords?"
+Give buttons:
+- AI Suggestions
+- Manual Keywords
+- Cancel
+
+If user chooses AI Suggestions:
+- Bot asks optionally for a niche or short hint, for example:
+  "Enter a niche or leave blank for general product suggestions"
+- Then use AI to generate around 10 ecommerce/product-research keywords suitable for Ads Library searches
+- Show them in a clean numbered list
+- Ask user to reply with:
+  - numbers like 1,3,5
+  - or type custom keywords separated by commas
+- Save selected keywords
+
+If user chooses Manual Keywords:
+- Bot asks:
+  "Type one or more keywords separated by commas"
+- Save keywords
+
+Step 3:
+Bot asks for countries.
+Allow one or more countries.
+For MVP, support manual entry as comma-separated values.
+Example:
+France, Germany, Italy
+
+Step 4:
+Bot asks for media type with buttons:
+- Video Only
+- Image Only
+- Both
+
+Step 5:
+Bot asks for active status with buttons:
+- Active Only
+- Inactive Only
+- Both
+
+Step 6:
+Bot shows summary like:
+Extraction summary:
+- requested products: 20
+- keywords: posture corrector, portable blender
+- countries: France
+- media type: video only
+- active status: active only
+
+Then ask:
+- Confirm
+- Cancel
+
+Step 7:
+If confirmed, start the extraction workflow.
+
+Important extraction behavior:
+The requested number means unique saved products, not raw ads scanned.
+So if user asks for 20 products, the scraper should try to save 20 unique products after filtering and deduplication.
+If not enough valid products are found, return partial results clearly.
+
+Core scraper requirements:
+Use Playwright in Python.
+Search Meta Ads Library using the user-selected countries and keywords.
+Scrape results and save product/ad data.
+Add waits and retries.
+Handle dynamic loading and scrolling.
+Continue even if one ad fails.
+
+Filtering requirements:
+- Support selected media type:
+  - video only
+  - image only
+  - both
+- Support selected active status:
+  - active only
+  - inactive only
+  - both
+- Skip rows that do not match user filters
+- Skip broken rows if required fields are missing
+
+Important note:
+Do not make the MVP overly dependent on extracting direct video files.
+If an ad is clearly video, save it even if direct downloadable video URL is not available.
+Same for images: save preview/main image URL if possible.
+
+What to extract per saved row:
+- keyword
+- country
+- advertiser_name
+- ad_library_url
+- landing_page_url
+- ad_text
+- media_type
+- media_url
+- thumbnail_url
+- extracted_product_name
+- normalized_product_name
+- main_image_url
+- page_title
+- duplicate_group_id
+- duplicates_count
+- active_status
+- status
+- created_at
+
+Default output values:
+- status = NEW
+- duplicates_count = 1 for new products
+
+Deduplication requirements:
+I do not want duplicate products when multiple advertisers promote the same product.
+
+Implement practical MVP deduplication using:
+1. exact duplicate checks:
+   - same ad_library_url
+   - same normalized landing_page_url
+   - same media_url when present
+2. text similarity:
+   - compare normalized product names
+   - compare page titles if useful
+3. image similarity:
+   - if main image exists, use a lightweight image similarity approach such as perceptual hashing
+   - do not overengineer this
+   - use image similarity as a supporting signal, not the only signal
+
+Deduplication decision:
+- exact match => duplicate
+- strong text match + strong image similarity => duplicate
+- duplicate should not create a new row
+- instead update duplicates_count on the existing row when possible
+
+Google Sheets requirements:
+Use Google Sheets as the output storage.
+Use a service account.
+Read existing rows first before adding new ones.
+Perform deduplication against already saved rows too.
+
+Sheet columns:
+- keyword
+- country
+- advertiser_name
+- ad_library_url
+- landing_page_url
+- ad_text
+- media_type
+- media_url
+- thumbnail_url
+- extracted_product_name
+- normalized_product_name
+- main_image_url
+- page_title
+- duplicate_group_id
+- duplicates_count
+- active_status
+- status
+- created_at
+
+Also save a local CSV backup if easy.
+
+AI requirements:
+Use AI only for keyword suggestions in this MVP.
+Do not use AI for every step.
+Bot should generate product-research keyword suggestions when user asks for AI suggestions.
+Keep this part modular so AI can be expanded later.
+
+Code structure requirements:
+Use modular Python files, not one giant file.
+
+Suggested files:
+- main.py
+- bot.py
+- conversation.py
+- ads_scraper.py
+- product_extractor.py
+- deduplicator.py
+- sheet_writer.py
+- ai_keywords.py
+- config.py
+- utils.py
+- requirements.txt
+- README.md
+
+Technical requirements:
+- Python
+- python-telegram-bot
+- Playwright
+- Google Sheets API
+- dotenv support
+- logging
+- clean comments
+- easy setup for beginners
+- runnable in Replit
+
+Config requirements:
+Use config.py and/or .env for:
+- TELEGRAM_BOT_TOKEN
+- OPENAI_API_KEY or AI provider key for keyword suggestions
+- GOOGLE_SHEETS_CREDENTIALS path or JSON env
+- GOOGLE_SHEET_NAME
+- HEADLESS
+- MAX_ADS_TO_SCAN_PER_KEYWORD
+- TEXT_DEDUP_THRESHOLD
+- IMAGE_DEDUP_THRESHOLD
+
+Error handling:
+- If user cancels, cleanly stop conversation
+- If one keyword fails, continue others
+- If one country fails, continue others
+- If one ad fails, skip it
+- Never crash the full run because of one broken page
+- Bot should send a clean final message even if results are partial
+
+Bot progress updates:
+If practical, send simple progress messages like:
+- starting extraction
+- processing keyword X in country Y
+- writing to sheet
+- finished
+
+Final Telegram result message:
+Example:
+Extraction finished
+- requested products: 20
+- saved unique products: 14
+- duplicates skipped/merged: 11
+- ads scanned: 73
+- filters used: video only, active only
+- sheet updated successfully
+
+README requirements:
+Explain step by step for a beginner:
+- how to create Telegram bot with BotFather
+- where to put bot token
+- how to create Google service account
+- how to share Google Sheet with service account email
+- how to set AI API key
+- how to install dependencies
+- how to run Playwright install
+- how to run the bot in Replit
+- how to test with /extract
+- how to debug in non-headless mode
+
+Implementation style:
+- Keep MVP practical
+- Keep code readable
+- Prefer reliability over fancy features
+- Avoid unnecessary complexity
+- Add TODO comments where future upgrades can be added
+
+Important final goal:
+A working MVP Telegram bot in Replit where I can start /extract, answer step by step:
+- quantity
+- keywords with AI suggestions or manual input
+- countries
+- media type
+- active status
+then confirm and have the system scrape Meta Ads Library, deduplicate products, and save clean results into Google Sheets.

@@ -1,0 +1,71 @@
+FB ADS LIBRARY, [18/03/2026 20:25]
+✅ 'Adele-hues%5' done — 6 / 210 valid products so far
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+🔄 Round 2: 204 more needed to reach minimum target of 210 — scanning deeper (up to 600 ads)…
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+Opening Ads Library for 'Adele-hues%5' in France…
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+Found 30 ads for 'Adele-hues%5' / France… extracting
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+Found 30 ads for 'Adele-hues%5' / France (30 with landing page, 0 new)
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+🔄 Round 3: 204 more needed to reach minimum target of 210 — scanning deeper (up to 800 ads)…
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+Opening Ads Library for 'Adele-hues%5' in France…
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+Found 30 ads for 'Adele-hues%5' / France… extracting
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+Found 30 ads for 'Adele-hues%5' / France (30 with landing page, 0 new)
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+🔄 Round 4: 204 more needed to reach minimum target of 210 — scanning deeper (up to 800 ads)…
+
+FB ADS LIBRARY, [18/03/2026 20:25]
+Opening Ads Library for 'Adele-hues%5' in France…
+
+FB ADS LIBRARY, [18/03/2026 20:26]
+Found 30 ads for 'Adele-hues%5' / France… extracting
+
+FB ADS LIBRARY, [18/03/2026 20:26]
+Found 30 ads for 'Adele-hues%5' / France (30 with landing page, 0 new)
+
+FB ADS LIBRARY, [18/03/2026 20:26]
+🔄 Round 5: 204 more needed to reach minimum target of 210 — scanning deeper (up to 800 ads)…
+
+FB ADS LIBRARY, [18/03/2026 20:26]
+Opening Ads Library for 'Adele-hues%5' in France…
+
+FB ADS LIBRARY, [18/03/2026 20:26]
+Found 30 ads for 'Adele-hues%5' / France… extracting
+
+FB ADS LIBRARY, [18/03/2026 20:26]
+Found 30 ads for 'Adele-hues%5' / France (30 with landing page, 0 new)
+
+FB ADS LIBRARY, [18/03/2026 20:26]
+🎉 Extraction finished!
+
+• Ads scanned: 150
+• Product clusters found: 6
+• Clusters saved: 6
+• Sheet status: ✅ Sheet updated successfully
+  ⏭ Skipped 3 duplicate(s) already in your sheet:
+• ⚡ clé usb 3.0 3 en 1, stockage portable haute — URL matches existing PRD-0049 (https://adele-hues.fr/products/3-in-1-flash-drive-portable-h)
+• 💡lampes led magnétiques rechargeables à capte — URL matches existing PRD-0058 (https://adele-hues.fr/products/new-year-sale---punch-free-sm)
+• ✨ illuminez votre intérieur avec la beauté de — URL matches existing PRD-0046 (https://adele-hues.fr/products/premium-cornflower-seeds-the-)
+  ⚠️ Could only find 6 / 210 minimum target (reached the 5-round search limit — add more keywords/countries or request a smaller quantity).
+
+Clusters:
+  PRD-0094 — URL:✓ Creative:✓
+  PRD-0095 — URL:✓ Creative:✓
+  PRD-0096 — URL:✓ Creative:✓
+  PRD-0098 — URL:✓ Creative:✓
+  PRD-0100 — URL:✓ Creative:✓
+  …and 1 more

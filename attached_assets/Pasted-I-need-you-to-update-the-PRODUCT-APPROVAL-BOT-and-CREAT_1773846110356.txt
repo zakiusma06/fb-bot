@@ -1,0 +1,280 @@
+I need you to update the PRODUCT APPROVAL BOT and CREATIVE BOOSTER BOT workflow very precisely.
+
+IMPORTANT:
+Do not guess.
+Do not simplify.
+Do exactly what is described below.
+
+==================================================
+1. NEW STATUS TO ADD
+==================================================
+
+Add a new status:
+
+PREAPPROVED
+
+This is a new intermediate status between the old approval step and the final APPROVED step.
+
+==================================================
+2. NEW SHEET TO ADD
+==================================================
+
+Create a new sheet page named:
+
+PREAPPROVED
+
+This sheet must store all products whose status is PREAPPROVED.
+
+==================================================
+3. CHANGE PRODUCT APPROVAL BOT BEHAVIOR
+==================================================
+
+OLD behavior:
+- when I click approve in PRODUCT APPROVAL BOT, the product goes directly to APPROVED sheet
+
+NEW behavior:
+- when I click approve in PRODUCT APPROVAL BOT:
+  1. change STATU to PREAPPROVED
+  2. move/copy the row to PREAPPROVED sheet
+  3. do NOT send it to APPROVED sheet anymore
+
+So PRODUCT APPROVAL BOT must no longer directly finalize products into APPROVED.
+
+It must now stop at PREAPPROVED.
+
+==================================================
+4. CHANGE CREATIVE BOOSTER BOT SOURCE
+==================================================
+
+CREATIVE BOOSTER BOT must now read products from:
+
+PREAPPROVED
+
+It should no longer start from the old source for this flow.
+
+==================================================
+5. KEEP OLD CREATIVE BOOSTER BEHAVIOR
+==================================================
+
+Do not remove the old behavior of CREATIVE BOOSTER BOT.
+
+The old creative search / next creative / continue searching flow must remain working.
+
+I still want to be able to search for more creatives exactly like before.
+
+==================================================
+6. ADD NEW APPROVE BUTTON IN CREATIVE BOOSTER BOT
+==================================================
+
+Add a new action/button in CREATIVE BOOSTER BOT:
+
+APPROVE
+
+IMPORTANT:
+- do NOT remove the old button for continuing creative search
+- do NOT replace the old button
+- the APPROVE button must exist IN ADDITION to the old search/continue buttons
+- while I am searching creatives, the APPROVE button must always stay available
+
+Goal:
+- I can continue searching for new creatives
+- but at any moment I can also click APPROVE and finalize the product
+
+==================================================
+7. VERY IMPORTANT: APPROVE MUST OPEN CONFIRMATION OPTIONS
+==================================================
+
+When I click APPROVE in CREATIVE BOOSTER BOT, do NOT immediately finalize.
+
+Instead, show me a confirmation choice based on how many creatives currently exist for that product.
+
+Example:
+If the product currently has 1 creative available, show:
+- Approve with 1 creative
+- Keep looking for creatives
+
+If the product currently has 2 creatives available, show:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Keep looking for creatives
+
+If the product currently has 3 creatives available, show:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Approve with 3 creatives
+- Keep looking for creatives
+
+If 4 creatives available:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Approve with 3 creatives
+- Approve with 4 creatives
+- Keep looking for creatives
+
+If 5 creatives available:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Approve with 3 creatives
+- Approve with 4 creatives
+- Approve with 5 creatives
+- Keep looking for creatives
+
+IMPORTANT RULE:
+The confirmation options must depend on the actual number of creatives found and currently attached to the product.
+
+==================================================
+8. WHAT "APPROVE WITH X CREATIVES" MEANS
+==================================================
+
+If I choose:
+- Approve with 1 creative
+- Approve with 2 creatives
+- Approve with 3 creatives
+- etc.
+
+Then CREATIVE BOOSTER BOT must finalize the product using that number of creatives.
+
+This means:
+1. keep/select the chosen number of creatives
+2. set STATU = APPROVED
+3. move the row from PREAPPROVED sheet to APPROVED sheet
+
+So final approval happens ONLY inside CREATIVE BOOSTER BOT now.
+
+==================================================
+9. WHAT "KEEP LOOKING FOR CREATIVES" MEANS
+==================================================
+
+If I choose:
+Keep looking for creatives
+
+Then:
+- do NOT approve the product yet
+- do NOT move it to APPROVED
+- do NOT change final status
+- simply return to the old creative search flow and continue searching for more creatives
+
+==================================================
+10. FINAL NEW WORKFLOW
+==================================================
+
+The workflow must now be exactly this:
+
+STEP 1:
+PRODUCT APPROVAL BOT
+- approve product
+- change status to PREAPPROVED
+- move product to PREAPPROVED sheet
+
+STEP 2:
+CREATIVE BOOSTER BOT
+- reads products from PREAPPROVED
+- lets me search for more creatives
+- keeps old creative search behavior
+- also always shows APPROVE button
+
+STEP 3:
+If I click APPROVE
+- show confirmation options:
+  - Approve with 1 creative
+  - Approve with 2 creatives
+  - ...
+  - depending on how many creatives currently exist
+  - Keep looking for creatives
+
+STEP 4:
+If I choose one approval option
+- finalize product
+- set STATU = APPROVED
+- move it from PREAPPROVED to APPROVED
+
+==================================================
+11. IMPORTANT STATE TRANSITIONS
+==================================================
+
+Update status logic to be exactly:
+
+OLD:
+PENDING/REVIEW -> APPROVED
+
+NEW:
+PENDING/REVIEW -> PREAPPROVED -> APPROVED
+
+So PREAPPROVED is now a real new state in the system, not just a label.
+
+==================================================
+12. IMPORTANT SHEET MOVEMENT RULES
+==================================================
+
+When moving between sheets, use safe logic:
+
+1. copy row to destination sheet
+2. verify success
+3. update/remove original row from source sheet
+
+Required movement rules:
+
+A. In PRODUCT APPROVAL BOT:
+- source: current review source
+- destination: PREAPPROVED
+- set STATU = PREAPPROVED
+
+B. In CREATIVE BOOSTER BOT final approval:
+- source: PREAPPROVED
+- destination: APPROVED
+- set STATU = APPROVED
+
+==================================================
+13. DO NOT BREAK EXISTING LOGIC
+==================================================
+
+Do not break:
+- old creative booster search logic
+- old continue searching behavior
+- current product data structure
+- current creative storage structure
+
+Only add this new intermediate PREAPPROVED workflow and new final confirmation logic.
+
+==================================================
+14. UI / ACTION REQUIREMENTS
+==================================================
+
+In CREATIVE BOOSTER BOT, while viewing creatives, I want both:
+- old continue/search actions
+- new APPROVE action
+
+APPROVE must remain visible and usable at the same time.
+
+After clicking APPROVE, show a clear confirmation menu.
+
+Do not make approval automatic.
+
+==================================================
+15. WHAT I EXPECT YOU TO CHANGE IN CODE
+==================================================
+
+Please update all relevant parts:
+- statuses enum/constants
+- sheet creation/init logic
+- product approval bot actions
+- creative booster bot source sheet logic
+- creative booster bot action buttons/options
+- final approval logic
+- row move utilities
+- any filtering logic based on status
+- any UI labels or command handlers affected by this new state
+
+==================================================
+16. AFTER CHANGING IT
+==================================================
+
+After implementation, tell me clearly:
+1. what files you changed
+2. what exact logic changed
+3. where PREAPPROVED is now used
+4. how final approval now works
+5. how many creative confirmation options are shown depending on available creatives
+
+Do not give me a vague answer.
+Do the implementation precisely.

@@ -1,0 +1,145 @@
+Create a second Telegram bot to moderate products from the Google Sheet.
+
+This bot is separate from the extraction bot.
+
+--------------------------------------------------
+
+GOAL
+
+The bot must allow manual review of products from the PENDING sheet tab and move them to APPROVED or DISAPPROVED.
+
+--------------------------------------------------
+
+GOOGLE SHEET STRUCTURE
+
+The sheet already contains these tabs:
+
+PENDING
+APPROVED
+DISAPROVED
+READY FOR ADS
+ADS RUNNING
+WINNER
+LOSER
+
+Columns include:
+
+SKU
+KEYWORD
+URL PRODUCT
+ADS LIBRARY MEDIA URL
+STATU
+
+--------------------------------------------------
+
+BOT COMMAND
+
+/review
+
+When the user sends /review, the bot must:
+
+1. load all rows from the PENDING tab
+2. count them
+3. start sending products one by one
+
+--------------------------------------------------
+
+PRODUCT MESSAGE FORMAT
+
+Example message:
+
+Product 4 / 70
+
+Product page:
+<URL PRODUCT>
+
+Ads creative:
+<ADS LIBRARY MEDIA URL>
+
+--------------------------------------------------
+
+BUTTONS
+
+Use inline Telegram buttons:
+
+APPROVE
+DISAPPROVE
+NEXT
+
+--------------------------------------------------
+
+BUTTON ACTIONS
+
+APPROVE
+
+- change STATU to APPROVED
+- move row to APPROVED tab
+- remove row from PENDING
+- show confirmation message
+- automatically show next product
+
+DISAPPROVE
+
+- change STATU to DISAPROVED
+- move row to DISAPPROVED tab
+- remove row from PENDING
+- show confirmation message
+- automatically show next product
+
+NEXT
+
+- do not change status
+- keep row in PENDING
+- show next product
+
+--------------------------------------------------
+
+PROGRESS INDICATOR
+
+Each message must show progress:
+
+Product X / TOTAL
+
+Example:
+
+Product 7 / 53
+
+--------------------------------------------------
+
+DUPLICATE PROTECTION
+
+When the extraction bot writes new products to the sheet, it must check all tabs:
+
+PENDING
+APPROVED
+DISAPPROVED
+READY FOR ADS
+ADS RUNNING
+WINNER
+LOSER
+
+If the same URL PRODUCT already exists in any tab, skip it.
+
+--------------------------------------------------
+
+IMPORTANT
+
+Do not change the extraction bot.
+This is a separate moderation bot.
+
+Use the same Google Sheets file.
+
+Make the code clean and modular.
+
+Commands:
+
+/review
+/stop
+
+The bot should keep track of review session state so it knows which product is next.
+
+--------------------------------------------------
+
+GOAL RESULT
+
+The user can quickly review products in Telegram and approve or reject them one by one while automatically updating the Google Sheet.

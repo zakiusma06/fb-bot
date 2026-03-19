@@ -1,0 +1,171 @@
+Now we need to modify ONLY the Creative Hunt Bot behavior and clean the spreadsheet.
+
+IMPORTANT:
+Do NOT modify PRODUCT RESEARCH BOT.
+Do NOT modify the NEW APPROVAL BOT we just designed.
+Do NOT modify FACEBOOK ADS BOT logic.
+
+Only modify:
+- Creative Hunt Bot behavior
+- Spreadsheet sheet structure cleanup
+
+==================================================
+1. CREATIVE HUNT BOT SOURCE CHANGE
+==================================================
+
+Creative Hunt Bot must now read products from:
+
+APPROVED sheet
+
+Previously it may have read from another sheet.
+Update it so the source is strictly:
+
+APPROVED
+
+Each product loaded into Creative Hunt Bot must come from APPROVED.
+
+==================================================
+2. REPLACE THE BUTTON "APPROVE"
+==================================================
+
+Inside Creative Hunt Bot, replace the button:
+
+APPROVE
+
+with a new button:
+
+READY FOR ADS
+
+Important:
+Do not keep the old APPROVE button.
+Completely replace it.
+
+==================================================
+3. READY FOR ADS BUTTON BEHAVIOR
+==================================================
+
+When the user clicks:
+
+READY FOR ADS
+
+the bot must do the following:
+
+1. set product status:
+
+STATU = READY FOR ADS
+
+2. move the row:
+
+APPROVED → READY FOR ADS
+
+3. move the full row data to the sheet:
+
+READY FOR ADS
+
+4. remove the row from APPROVED after successful move.
+
+==================================================
+4. CREATIVE HUNT BOT FLOW (FINAL)
+==================================================
+
+Creative Hunt Bot now works like this:
+
+INPUT:
+APPROVED sheet
+
+For each product:
+- show product
+- allow creative search / creative improvement (existing behavior)
+- allow skipping products
+- allow searching for additional creatives
+
+When ready:
+
+User clicks:
+
+READY FOR ADS
+
+Then:
+
+APPROVED → READY FOR ADS
+
+==================================================
+5. DO NOT BREAK EXISTING CREATIVE SEARCH LOGIC
+==================================================
+
+Keep all existing logic in Creative Hunt Bot:
+
+- creative search
+- creative preview
+- creative selection
+- creative improvement workflow
+
+Only change:
+
+1. source sheet = APPROVED
+2. button APPROVE → READY FOR ADS
+3. final move sheet = READY FOR ADS
+
+Everything else must remain the same.
+
+==================================================
+6. SPREADSHEET CLEANUP
+==================================================
+
+Now remove any sheet tabs that are no longer used.
+
+After the new architecture, the spreadsheet must contain ONLY these tabs:
+
+PENDING
+APPROVED
+DISAPPROVED
+READY FOR ADS
+ADS RUNNING
+WINNER
+LOSER
+ADS ERROR
+
+Delete any other sheet tabs that existed from the old system such as:
+
+PREAPPROVED
+MODERATION
+PRICING
+CREATIVE_QUEUE
+TESTING
+or any other obsolete sheet.
+
+Before deleting:
+confirm the tab is not referenced in code.
+
+==================================================
+7. FINAL DATA FLOW (CONFIRMATION)
+==================================================
+
+PRODUCT RESEARCH BOT
+→ writes to PENDING
+
+NEW APPROVAL BOT
+→ PENDING → APPROVED
+→ PENDING → DISAPPROVED
+
+CREATIVE HUNT BOT
+→ APPROVED → READY FOR ADS
+
+FACEBOOK ADS BOT
+→ READY FOR ADS → ADS RUNNING
+→ then manages WINNER / LOSER / ADS ERROR
+
+==================================================
+8. AFTER IMPLEMENTATION
+==================================================
+
+After you finish, tell me:
+
+1. which file in Creative Hunt Bot you modified
+2. where the READY FOR ADS button is defined
+3. how the row move from APPROVED → READY FOR ADS works
+4. which sheet tabs were deleted
+5. confirm the final sheet list
+
+Do not give a vague answer.
+Show the exact modifications.

@@ -1,0 +1,295 @@
+Update the PRODUCT RESEARCH BOT, PRODUCT APPROVAL BOT, PRICING / PRODUCT CREATION BOT, and GOOGLE SHEETS STRUCTURE with the following improvements.
+
+Do NOT redesign the current system architecture. Extend the existing logic only.
+
+---------------------------------------------------
+1. FIX CATEGORY DETECTION
+---------------------------------------------------
+
+Current problem:
+Almost all products are classified as "Other".
+
+Implement a 2-step classification system.
+
+Step 1 — Product Understanding
+Use AI to extract product meaning from:
+- product title
+- product description
+- product images
+
+Step 2 — Category Mapping
+Map the product meaning to the closest category from the list below.
+
+Allowed categories:
+
+Home
+Kitchen
+Beauty
+Health
+Tools
+Car
+Fashion
+Pet
+Gadgets
+Outdoor
+Kids
+Other
+
+Important rules:
+
+- Always choose the closest category
+- Do NOT default to "Other"
+- Only use "Other" if absolutely impossible to classify
+
+Save the result in field:
+
+CATEGORY
+
+CATEGORY must appear immediately after KEYWORD in all sheets.
+
+---------------------------------------------------
+2. RESTORE PREVIOUS SOURCING FEATURE
+---------------------------------------------------
+
+Restore the previously deleted sourcing lookup feature.
+
+Do NOT build a new sourcing system.
+
+Reuse the previous sourcing logic because it already handled:
+
+- supplier lookup
+- image mismatch filtering
+- ignoring logos
+- correct supplier detection
+
+---------------------------------------------------
+3. EXTRACT PRODUCT WEIGHT
+---------------------------------------------------
+
+Add a new field:
+
+WEIGHT GRAM
+
+The weight is available on the sourcing page.
+
+Open the section:
+
+Packing
+
+Inside it locate:
+
+重量(g)
+
+Extract the numeric value.
+
+Example:
+
+500
+
+Save it as integer grams.
+
+If weight is not found:
+
+Leave empty.
+Do NOT guess weight.
+
+---------------------------------------------------
+4. DETECT PRODUCT VARIANTS
+---------------------------------------------------
+
+Detect if the competitor product page contains variants.
+
+Variants include:
+
+- color options
+- size options
+- style options
+- quantity options
+
+Create field:
+
+HAS VARIANTS
+
+Possible values:
+
+YES
+NO
+
+---------------------------------------------------
+5. UPDATE GOOGLE SHEETS STRUCTURE
+---------------------------------------------------
+
+Add these fields to ALL sheet tabs:
+
+CATEGORY
+SOURCING PRICE USD
+SOURCING URL
+WEIGHT GRAM
+HAS VARIANTS
+
+These fields must exist in:
+
+PENDING
+APPROVED
+DISAPPROVED
+READY FOR ADS
+ADS RUNNING
+WINNER
+LOSER
+
+When rows move between sheets, these fields must move with the row.
+
+---------------------------------------------------
+6. PRODUCT APPROVAL BOT IMPROVEMENTS
+---------------------------------------------------
+
+When showing a product for review, display:
+
+Product Page URL
+Ads Library Creative URL
+Keyword
+Category
+Sourcing Price (USD)
+Supplier URL
+Weight (grams)
+Variants (YES / NO)
+
+Example display:
+
+Product 5 / 73
+
+Keyword:
+solar light
+
+Category:
+Home
+
+Product Page:
+https://example-store.com/product/solar-lamp
+
+Ads Library Creative:
+https://www.facebook.com/ads/library/?id=123456789
+
+Sourcing Price:
+$3.20 USD
+
+Supplier Link:
+https://detail.1688.com/offer/123456789.html
+
+Weight:
+500 g
+
+Variants:
+YES
+
+---------------------------------------------------
+7. APPROVAL BOT FILTERS
+---------------------------------------------------
+
+Filters must be OPTIONAL.
+
+User may choose one filter, multiple filters, or skip all filters.
+
+Available filters:
+
+CATEGORY
+
+SOURCING PRICE USD ranges
+
+Example:
+
+under $5
+$5-10
+$10-20
+$20+
+
+VARIANTS FILTER
+
+WITH VARIANTS
+NO VARIANTS
+
+KEYWORD SORTING
+
+Keywords ranked by approval rate.
+
+NO FILTER OPTION
+
+User can choose:
+
+Show all pending products.
+
+---------------------------------------------------
+8. EDIT / APPROVE SOURCING DATA
+---------------------------------------------------
+
+During approval review allow editing of sourcing data.
+
+Options:
+
+APPROVE SOURCING PRICE
+EDIT SOURCING PRICE
+
+APPROVE WEIGHT
+EDIT WEIGHT
+
+If editing sourcing price:
+
+User enters price in RMB.
+
+Bot must:
+
+convert RMB → USD
+store the USD value in the sheet.
+
+---------------------------------------------------
+9. PRICING AND PRODUCT CREATION BOT
+---------------------------------------------------
+
+Keep the current pricing and product creation bot logic exactly as it is.
+
+Only add the following information display before the user sets the final selling price.
+
+Show:
+
+SOURCING PRICE USD
+WEIGHT GRAM
+
+Then calculate and display:
+
+SUGGESTED SELLING PRICE
+
+Formula:
+
+Suggested Price =
+SOURCING PRICE USD
++ 8.5 (shipping agent cost)
++ 6 (marketing fees)
++ 10 (profit)
++ China shipping cost
+
+China shipping cost calculation:
+
+(weight_grams / 1000) * 15
+
+Example:
+
+Weight = 500g
+
+Shipping cost:
+
+0.5 * 15 = 7.5
+
+Suggested Price:
+
+sourcing_price
++ 8.5
++ 6
++ 10
++ shipping_cost
+
+Display this suggested price.
+
+User can either:
+
+accept suggested price
+or override with manual price.
