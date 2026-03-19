@@ -7,7 +7,9 @@ import os
 import json
 from dotenv import load_dotenv
 
-load_dotenv()
+# Try secrets.env first (VPS convention), fall back to .env
+_cfg_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_cfg_dir, "secrets.env")) or load_dotenv(os.path.join(_cfg_dir, ".env"))
 
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
