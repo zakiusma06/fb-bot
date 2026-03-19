@@ -167,11 +167,14 @@ async def ask_keyword_suggestions(update: Update, context: ContextTypes.DEFAULT_
         lines.append(f"{i}. {s['keyword']} ({pct}% approval rate)")
 
     keyword_list = "\n".join(lines)
-    await thinking_msg.edit_text(
+    msg_text = (
         f"*Top Keyword Suggestions*\n\n{keyword_list}\n\n"
-        "Reply with the numbers you want (e.g. `1,3,5`) or type your own keywords:",
-        parse_mode="Markdown",
+        "Reply with the numbers you want (e.g. `1,3,5`) or type your own keywords:"
     )
+    try:
+        await thinking_msg.edit_text(msg_text, parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text(msg_text, parse_mode="Markdown")
     return ASK_KEYWORD_SELECTION
 
 
