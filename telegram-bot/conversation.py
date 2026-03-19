@@ -264,12 +264,16 @@ async def ask_manual_keywords(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def _proceed_to_countries(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     d = context.user_data
     source_display = f"Keywords: *{', '.join(d.get('keywords', []))}*"
-    await update.message.reply_text(
+    text = (
         f"{source_display}\n\n"
         "Which countries should I search?\n"
-        "Examples: `France`, `US, Germany`, `ALL`",
-        parse_mode="Markdown",
+        "Examples: `France`, `US, Germany`, `ALL`"
     )
+    # update.message is None when coming from a callback query button tap
+    if update.message:
+        await update.message.reply_text(text, parse_mode="Markdown")
+    else:
+        await update.callback_query.message.reply_text(text, parse_mode="Markdown")
     return ASK_COUNTRIES
 
 
