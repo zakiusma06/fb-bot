@@ -509,10 +509,14 @@ async def _do_extraction(
 
         # ── Phase 1 + 2-4: scrape → enrich → cluster → source → save (per keyword) ──
         # IMPORTANT: Process and save each keyword's ads immediately before moving to next
-        for keyword in keywords:
+        for kw_idx, keyword in enumerate(keywords, 1):
             if login_wall_hit:
                 break
-            
+
+            await progress(
+                f"🔍 *Round {round_num} — keyword {kw_idx}/{len(keywords)}:* `{keyword}` — scraping…"
+            )
+
             keyword_ads: list[dict] = []
             for country in countries:
                 if login_wall_hit:
