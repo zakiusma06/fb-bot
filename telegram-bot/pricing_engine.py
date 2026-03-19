@@ -278,8 +278,70 @@ async def get_sourcing_for_cluster(cluster) -> tuple[str, str, str]:
         f"{supplier_price_cny:.2f} CNY = {price_usd_str} USD | {supplier_url[:80]}"
     )
 
-    # Weight extraction disabled — WEIGHT GRAM left empty.
-    return (price_usd_str, supplier_url, "")
+    # ── Weight extraction from 1688 product page ─────────────────────────────
+    weight_gram_str = ""
+    if supplier_url and "1688.com" in supplier_url:
+        try:
+            weight_gram_str = await asyncio.wait_for(
+                _extract_weight_from_1688(supplier_url), timeout=30
+            )
+            if weight_gram_str:
+                logger.info(f"[sourcing] weight from 1688: {weight_gram_str}g")
+        except Exception as e:
+            logger.warning(f"[sourcing] weight extraction failed: {e}")
+
+    return (price_usd_str, supplier_url, weight_gram_str)
+
+
+# ── 1688 weight extraction ────────────────────────────────────────────────────
+
+async def _extract_weight_from_1688(url: str) -> str:
+    """
+    Visit a 1688.com product page and extract the weight in grams from the
+    Packing table (重量(g) column).  Returns a string like "500" or "" if not found.
+    Uses httpx (no browser) — fast and avoids Playwright overhead.
+    Falls back to empty string on any error.
+    """
+    try:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Referer": "https://www.1688.com/",
+        }
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=20, headers=headers
+        ) as client:
+            resp = await client.get(url)
+            html = resp.text
+
+        # Strategy 1: look for 重量 followed by digits inside the HTML text
+        # Matches patterns like: 重量(g)</th>...500 or 重量：500g etc.
+        patterns = [
+            # table cell pattern: 重量(g) header → value in next td
+            r'重量[（(][gG克][)）][^<]{0,30}?(\d+(?:\.\d+)?)',
+            # JSON data embedded in page scripts (1688 often embeds product data as JSON)
+            r'"weight"\s*:\s*"?(\d+(?:\.\d+)?)"?',
+            r'"grossWeight"\s*:\s*"?(\d+(?:\.\d+)?)"?',
+            r'"packageWeight"\s*:\s*"?(\d+(?:\.\d+)?)"?',
+            # plain text weight mentions near "g" unit
+            r'重量[：:]\s*(\d+(?:\.\d+)?)\s*[gG克]',
+        ]
+        for pat in patterns:
+            m = re.search(pat, html)
+            if m:
+                val = float(m.group(1))
+                # sanity: product weight should be between 1g and 50,000g (50kg)
+                if 1 <= val <= 50000:
+                    return str(int(val) if val == int(val) else val)
+
+        return ""
+    except Exception as e:
+        logger.debug(f"[sourcing] _extract_weight_from_1688 error: {e}")
+        return ""
 
 
 # ── Product page screenshot ───────────────────────────────────────────────────
