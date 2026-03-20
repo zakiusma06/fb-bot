@@ -34,11 +34,18 @@ _LAUNCH_ARGS = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--disable-blink-features=AutomationControlled",
+    "--disable-infobars",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--window-size=1280,900",
 ]
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
+    "Chrome/122.0.0.0 Safari/537.36"
 )
 _VIEWPORT    = {"width": 1280, "height": 900}
 _LOCALE      = "en-US"
