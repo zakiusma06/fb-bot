@@ -21,36 +21,49 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=api_key)
 
 
+_LANGUAGE_NAMES = {
+    "fr": "French",
+    "en": "English",
+    "ar": "Arabic",
+    "es": "Spanish",
+    "pt": "Portuguese",
+}
+
+
 def generate_product_content(
     raw_title: str,
     raw_description: str,
+    language: str | None = None,
 ) -> dict:
     """
     Returns:
       {
-        "title":       str,   # French, 5-10 words, no brand names
-        "description": str,   # French, short structured HTML-ready text
+        "title":       str,   # 5-10 words, no brand names
+        "description": str,   # short structured HTML-ready text
       }
+    Language defaults to SHOPIFY_CONTENT_LANGUAGE env var, fallback "fr".
     """
     client = _get_client()
 
-    prompt = f"""You are a French Shopify product copywriter for a Guinean e-commerce store.
+    lang_code = (language or os.environ.get("SHOPIFY_CONTENT_LANGUAGE", "fr")).lower()
+    lang_name = _LANGUAGE_NAMES.get(lang_code, lang_code.upper())
 
-Given this raw product data scraped from a competitor page:
+    prompt = f"""You are a Shopify product copywriter. You MUST write EXCLUSIVELY in {lang_name}. Do NOT use any other language under any circumstances.
+
+Raw product data scraped from a competitor page:
 
 TITLE: {raw_title}
 DESCRIPTION: {raw_description}
 
-Generate:
+Generate the following in {lang_name} ONLY:
 
 1. TITLE
-- Pure descriptive title in French
+- Pure descriptive title in {lang_name}
 - No brand names, no model numbers
 - Describe the product function clearly
 - 5–10 words
-- Example: "Détecteur d'Angle Numérique Magnétique"
 
-2. DESCRIPTION (in French, structured as short paragraphs):
+2. DESCRIPTION (in {lang_name}, structured as short paragraphs):
 - One sentence benefit introduction
 - One sentence about the problem it solves
 - One sentence how the product solves it
@@ -58,6 +71,7 @@ Generate:
 - One short closing line
 
 Keep everything concise and commercial.
+IMPORTANT: Every single word must be in {lang_name}. Do not mix languages.
 
 Respond in this exact format:
 TITLE: <title here>

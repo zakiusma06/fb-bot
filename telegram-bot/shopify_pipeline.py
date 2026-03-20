@@ -27,6 +27,7 @@ async def run_pipeline(
     price:            str,
     compare_at_price: str,
     sku:              str,
+    language:         str = None,
 ) -> dict:
     """
     Full pipeline. Returns a result dict:
@@ -62,6 +63,7 @@ async def run_pipeline(
     ai = generate_product_content(
         raw_title=scraped["title"],
         raw_description=scraped["description"],
+        language=language,
     )
 
     if not ai.get("title"):
