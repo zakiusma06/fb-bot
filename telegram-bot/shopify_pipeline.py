@@ -69,9 +69,17 @@ async def run_pipeline(
 
     # ── Step 3: Create & publish Shopify product ───────────────────────────
     await send_status("🛍 <b>Step 3/3</b> — Creating and publishing Shopify product…")
+    # Clean description: strip --- separator lines, center-align
+    desc_lines = [
+        line for line in ai["description"].splitlines()
+        if line.strip() not in ("---", "—--", "--", "———")
+    ]
+    desc_html = "<br>".join(desc_lines)
+    body_html = f'<div style="text-align:center">{desc_html}</div>'
+
     result = create_and_publish_product(
         title=ai["title"],
-        body_html=ai["description"].replace("\n", "<br>"),
+        body_html=body_html,
         price=price,
         compare_at_price=compare_at_price,
         image_urls=scraped["image_urls"],
@@ -84,7 +92,7 @@ async def run_pipeline(
     return {
         "ok":          True,
         "title":       ai["title"],
-        "description": ai["description"],
+        "description": body_html,
         "admin_url":   result["admin_url"],
         "store_url":   result["store_url"],
         "product_id":  result["id"],

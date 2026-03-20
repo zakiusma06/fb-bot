@@ -10,10 +10,12 @@ Returns a dict:
 """
 
 import hashlib
+import json
 import logging
 import re
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +138,37 @@ def _dedupe_by_hash(urls: list) -> list:
     return result
 
 
+def _shopify_product_images(url: str) -> list:
+    """
+    Try to fetch images directly from Shopify's product JSON API.
+    Works for any Shopify store — returns up to 5 CDN image URLs.
+    """
+    try:
+        parsed = urlparse(url)
+        # Build the .json API URL: /products/<handle>.json
+        path = parsed.path.rstrip("/")
+        json_url = f"{parsed.scheme}://{parsed.netloc}{path}.json"
+        resp = requests.get(json_url, headers=_HEADERS, timeout=15)
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        images = data.get("product", {}).get("images", [])
+        result = []
+        for img in images:
+            src = img.get("src", "")
+            # Remove Shopify size suffix (e.g. _800x800) to get full-size
+            src_clean = re.sub(r"_\d+x\d*(\.\w+)$", r"\1", src.split("?")[0])
+            if src_clean and _is_good_image_url(src_clean):
+                result.append(src_clean)
+            elif src and _is_good_image_url(src):
+                result.append(src)
+        logger.info(f"[scraper] Shopify JSON API returned {len(result)} images")
+        return result[:5]
+    except Exception as e:
+        logger.debug(f"[scraper] Shopify JSON API failed: {e}")
+        return []
+
+
 def scrape_product_page(url: str) -> dict:
     logger.info(f"[scraper] Fetching {url}")
     try:
@@ -178,13 +211,40 @@ def scrape_product_page(url: str) -> dict:
     # ── Images ─────────────────────────────────────────────────────────────
     candidates = []
 
+    # Strategy 1: Shopify product JSON API (best source — returns all gallery images)
+    shopify_imgs = _shopify_product_images(url)
+    if shopify_imgs:
+        candidates.extend(shopify_imgs)
+
+    # Strategy 2: Shopify product JSON embedded in page <script> tags
+    if len(candidates) < 2:
+        for script in soup.find_all("script", type="application/json"):
+            try:
+                data = json.loads(script.string or "")
+                # Handle both {"product": {...}} and raw product objects
+                product = data.get("product", data)
+                imgs = product.get("images", product.get("media", []))
+                for img in imgs:
+                    src = img.get("src", "") or img.get("preview_image", {}).get("src", "")
+                    if src and _is_good_image_url(src):
+                        candidates.append(src.split("?")[0])
+            except Exception:
+                pass
+
+    # Strategy 3: og:image meta tags
     for tag in soup.find_all("meta", property="og:image"):
         src = (tag.get("content") or "").strip()
         if src and _is_good_image_url(src):
             candidates.append(src)
 
+    # Strategy 4: HTML img tags (data-src for lazy-loaded Shopify galleries)
     for img in soup.find_all("img"):
-        src = (img.get("src") or img.get("data-src") or img.get("data-lazy-src") or "").strip()
+        src = (
+            img.get("data-src") or
+            img.get("data-lazy-src") or
+            img.get("data-srcset", "").split()[0] or
+            img.get("src") or ""
+        ).strip()
         if not src:
             continue
         if src.startswith("//"):
