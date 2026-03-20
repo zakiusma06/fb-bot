@@ -451,6 +451,7 @@ def create_creative_single(
         video_data = {
             "video_id":       asset["video_id"],
             "message":        primary_text,
+            "title":          headline,
             "call_to_action": cta_value,
         }
         if asset.get("thumbnail_url"):

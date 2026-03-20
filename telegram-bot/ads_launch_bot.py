@@ -770,26 +770,10 @@ async def _handle_text_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif state == S_COPY_TONE:
         s["copy_tone"] = "" if text.lower() == "skip" else text
-        s["state"] = S_COPY_N_TEXTS
-        await _reply(update, "How many *primary text* options to generate? _(1–5)_")
-
-    elif state == S_COPY_N_TEXTS:
-        try:
-            n = max(1, min(5, int(text)))
-        except ValueError:
-            await _reply(update, "Please enter a number between 1 and 5.")
-            return
-        s["copy_n_texts"] = n
-        s["state"] = S_COPY_N_HEADS
-        await _reply(update, f"Primary texts: *{n}* ✅\n\nHow many *headline* options to generate? _(1–5)_")
-
-    elif state == S_COPY_N_HEADS:
-        try:
-            n = max(1, min(5, int(text)))
-        except ValueError:
-            await _reply(update, "Please enter a number between 1 and 5.")
-            return
-        s["copy_n_heads"] = n
+        # Auto-set counts based on number of assets (default 3 if not yet known)
+        n_assets = len(s.get("assets", [])) or 3
+        s["copy_n_texts"] = n_assets
+        s["copy_n_heads"] = n_assets
         s["state"] = S_COPY_GENERATING
         await _reply(update, "⏳ Generating ad copy…")
         await _run_copy_generation(update, s)
@@ -1288,12 +1272,15 @@ async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
             ad_ids = []
             for i, asset in enumerate(good_assets):
                 ad_name = f"{campaign_name} #{i + 1}"
+                # Each creative gets its own text + headline (cycle if fewer than assets)
+                ad_text = texts_list[i % len(texts_list)]
+                ad_head = heads_list[i % len(heads_list)]
                 await update.effective_message.reply_text(f"🎨 Creating creative {i + 1}/{len(good_assets)}…")
                 c_id = await asyncio.wait_for(
                     loop.run_in_executor(
-                        None, lambda a=asset, n=ad_name: meta.create_creative_single(
+                        None, lambda a=asset, n=ad_name, t=ad_text, h=ad_head: meta.create_creative_single(
                             ad_account_id, n, page_id, a,
-                            landing_url, texts_list, heads_list, cta
+                            landing_url, t, h, cta
                         )
                     ),
                     timeout=30,
