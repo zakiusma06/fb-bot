@@ -1486,29 +1486,38 @@ async def _fetch_stats_card(uid: int, sku: str, loop) -> tuple[str, InlineKeyboa
     status_lines = ""
     has_error    = False
 
+    # Always show sheet status as baseline
+    sheet_status = str(row.get("STATU", "") or row.get("STATUS", "") or "").strip()
+    if sheet_status:
+        status_lines += f"\n*Status:* {_fmt_status(sheet_status)}"
+
     if campaign_id:
-        # Delivery status
+        # Delivery status from Meta API
         try:
             delivery = await loop.run_in_executor(
                 None, lambda cid=campaign_id: meta.get_delivery_status(cid)
             )
-            if delivery:
+            if delivery and "campaign" in delivery:
                 camp_eff = delivery["campaign"].get("effective_status", "")
-                status_lines += f"\n*Campaign:* {_fmt_status(camp_eff)}"
-                if _is_error_status(camp_eff):
-                    has_error = True
+                if camp_eff:
+                    # Override sheet status with live Meta status
+                    status_lines = f"\n*Campaign:* {_fmt_status(camp_eff)}"
+                    if _is_error_status(camp_eff):
+                        has_error = True
 
                 for adset in delivery.get("adsets", []):
                     eff = adset.get("effective_status", "")
-                    status_lines += f"\n*Ad Set:* {_fmt_status(eff)}"
-                    if _is_error_status(eff):
-                        has_error = True
+                    if eff:
+                        status_lines += f"\n*Ad Set:* {_fmt_status(eff)}"
+                        if _is_error_status(eff):
+                            has_error = True
 
                 for ad in delivery.get("ads", []):
                     eff = ad.get("effective_status", "")
-                    status_lines += f"\n*Ad:* {_fmt_status(eff)}"
-                    if _is_error_status(eff):
-                        has_error = True
+                    if eff:
+                        status_lines += f"\n*Ad:* {_fmt_status(eff)}"
+                        if _is_error_status(eff):
+                            has_error = True
         except Exception as e:
             logger.warning(f"[stats] Could not fetch delivery status for {sku}: {e}")
 
