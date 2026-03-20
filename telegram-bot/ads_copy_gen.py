@@ -51,61 +51,77 @@ def generate_ad_copy(
     if n_texts == 0 and n_headlines == 0:
         return {"primary_texts": [], "headlines": []}
 
+    style = tone.strip() if tone and tone.strip() else "persuasive, benefit-focused"
+
+    # Shared strict style block — the user's instruction is the absolute law
+    style_block = f"""USER INSTRUCTION (THIS IS A HARD RULE — obey it literally above everything else):
+"{style}"
+
+If the instruction says "1 line" → each text must be exactly 1 line.
+If it says "2 emojis" → use exactly 2 emojis, no more, no less.
+If it says "short" → keep it short, do not add extra sentences.
+If it says "no emojis" → use zero emojis.
+The instruction overrides ALL other rules below. Do not add structure (hook/CTA/etc.) unless the instruction asks for it."""
+
     if n_texts == 0:
-        style = tone or "persuasive, benefit-focused"
-        prompt = f"""You are an expert Facebook ads copywriter.
-Generate {n_headlines} short ad HEADLINE options (3–7 words each) for:
+        prompt = f"""You are a Facebook ads copywriter. Follow the user instruction below to the letter.
+
 PRODUCT: {product_name}
 KEYWORD: {keyword}
 PRICE: {price}
-LANGUAGE: {language}
-WRITING STYLE (follow exactly, overrides defaults): {style}
-Rules: punchy, include benefit or price signal, all in {language}, no hashtags, no "Facebook"/"Meta", each meaningfully different. Apply the WRITING STYLE above.
-Format EXACTLY:
+LANGUAGE: {language} — write ONLY in {language}.
+
+{style_block}
+
+Additional rules (apply only if they don't conflict with the user instruction above):
+- No hashtags. Do not mention "Facebook" or "Meta".
+- Each option must be meaningfully different.
+
+Generate exactly {n_headlines} HEADLINE options.
+
+Format EXACTLY (no extra text):
 HEADLINES:
 1. <headline>
 2. <headline>
 """
     elif n_headlines == 0:
-        style = tone or "persuasive, benefit-focused"
-        prompt = f"""You are an expert Facebook ads copywriter.
-Generate {n_texts} PRIMARY TEXT options for:
+        prompt = f"""You are a Facebook ads copywriter. Follow the user instruction below to the letter.
+
 PRODUCT: {product_name}
 KEYWORD: {keyword}
 PRICE: {price}
-LANGUAGE: {language}
-WRITING STYLE (follow exactly, overrides defaults): {style}
-Rules: hook + benefit + soft CTA, all in {language}, no hashtags, no "Facebook"/"Meta", each meaningfully different. Length and emoji usage must match the WRITING STYLE above.
-Format EXACTLY:
+LANGUAGE: {language} — write ONLY in {language}.
+
+{style_block}
+
+Additional rules (apply only if they don't conflict with the user instruction above):
+- No hashtags. Do not mention "Facebook" or "Meta".
+- Each option must be meaningfully different.
+
+Generate exactly {n_texts} PRIMARY TEXT options.
+
+Format EXACTLY (no extra text):
 PRIMARY TEXTS:
 1. <text>
 2. <text>
 """
     else:
-        style = tone or "persuasive, benefit-focused"
-        prompt = f"""You are an expert Facebook ads copywriter.
+        prompt = f"""You are a Facebook ads copywriter. Follow the user instruction below to the letter.
 
-Generate Facebook ad copy for the following product:
-
-PRODUCT NAME: {product_name}
+PRODUCT: {product_name}
 KEYWORD: {keyword}
 PRICE: {price}
-LANGUAGE: {language}
+LANGUAGE: {language} — write ONLY in {language}.
 
-WRITING STYLE — follow this EXACTLY, it overrides everything else:
-{style}
+{style_block}
 
-Rules:
-- Primary texts: hook + benefit + soft CTA. Length and emoji usage must match the WRITING STYLE above.
-- Headlines: short (3–7 words), punchy, include either benefit or price signal. Apply the same WRITING STYLE.
-- Write all copy in {language}.
-- Do NOT include hashtags.
-- Do NOT mention "Facebook" or "Meta".
-- Keep each option meaningfully different (vary angle, hook, or benefit emphasis).
+Additional rules (apply only if they don't conflict with the user instruction above):
+- No hashtags. Do not mention "Facebook" or "Meta".
+- Each option must be meaningfully different.
 
 Generate exactly {n_texts} PRIMARY TEXT options and exactly {n_headlines} HEADLINE options.
 
-Format your response EXACTLY like this (no extra text before or after):
+Format EXACTLY (no extra text before or after):
 
 PRIMARY TEXTS:
 1. <text>
