@@ -700,10 +700,31 @@ def get_delivery_status(campaign_id: str) -> dict:
         logger.info(f"[meta] get_delivery_status: fetching campaign {campaign_id}")
         camp = _get(campaign_id, {"fields": fields})
         logger.info(f"[meta] get_delivery_status campaign raw: {camp}")
-        adsets_raw = _get(f"{campaign_id}/adsets", {"fields": fields + ",name", "limit": "50"})
+        adsets_raw = _get(f"{campaign_id}/adsets", {"fields": fields + ",name,start_time", "limit": "50"})
         logger.info(f"[meta] get_delivery_status adsets raw: {adsets_raw}")
         ads_raw    = _get(f"{campaign_id}/ads",    {"fields": fields + ",name", "limit": "50"})
         logger.info(f"[meta] get_delivery_status ads raw: {ads_raw}")
+
+        # If all adsets have a future start_time and status=ACTIVE, the campaign
+        # is scheduled — Meta API still returns effective_status=ACTIVE in this case
+        # but FB UI correctly shows "Programmé". Detect it here.
+        from datetime import datetime, timezone as _tz
+        now_utc = datetime.now(_tz.utc)
+        def _resolve_status(eff: str, status: str, start_time_str: str | None = None) -> str:
+            if eff.upper() == "ACTIVE" and start_time_str:
+                try:
+                    from datetime import datetime
+                    import re
+                    # parse ISO 8601 with optional +HH:MM offset
+                    st = datetime.fromisoformat(re.sub(r"([+-]\d{2}):(\d{2})$", r"\1\2", start_time_str))
+                    if st.tzinfo is None:
+                        st = st.replace(tzinfo=_tz.utc)
+                    if st > now_utc:
+                        return "SCHEDULED"
+                except Exception:
+                    pass
+            return eff
+
         result = {
             "campaign": {
                 "id":               camp.get("id", campaign_id),
@@ -714,8 +735,13 @@ def get_delivery_status(campaign_id: str) -> dict:
                 {
                     "id":               a.get("id"),
                     "name":             a.get("name", ""),
-                    "effective_status": a.get("effective_status", "UNKNOWN"),
+                    "effective_status": _resolve_status(
+                        a.get("effective_status", "UNKNOWN"),
+                        a.get("status", "UNKNOWN"),
+                        a.get("start_time"),
+                    ),
                     "status":           a.get("status", "UNKNOWN"),
+                    "start_time":       a.get("start_time"),
                 }
                 for a in adsets_raw.get("data", [])
             ],
@@ -729,6 +755,10 @@ def get_delivery_status(campaign_id: str) -> dict:
                 for a in ads_raw.get("data", [])
             ],
         }
+        # If campaign shows ACTIVE but all adsets are SCHEDULED → campaign is also scheduled
+        if result["campaign"]["effective_status"].upper() == "ACTIVE" and result["adsets"]:
+            if all(a["effective_status"].upper() == "SCHEDULED" for a in result["adsets"]):
+                result["campaign"]["effective_status"] = "SCHEDULED"
         logger.info(f"[meta] get_delivery_status result: {result}")
         return result
     except Exception as e:
