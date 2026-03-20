@@ -102,25 +102,25 @@ async def scrape_ads(
             # Warm up the session by visiting facebook.com first.
             # Going cold directly to the Ads Library triggers the login wall even with valid cookies.
             await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(0.5)
             await _handle_dialogs(page)
 
             # Navigate directly to the Ads Library search URL
             search_url = _build_search_url(keyword, country_code, active_filter)
             await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
             try:
-                await page.wait_for_load_state("networkidle", timeout=5000)
+                await page.wait_for_load_state("networkidle", timeout=4000)
             except Exception:
                 pass
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(0.5)
 
             # Handle cookie/login dialogs
             await _handle_dialogs(page)
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.2)
 
             # Click "All ads" category if a category selector is visible
             await _select_all_ads_category(page)
-            await asyncio.sleep(0.6)
+            await asyncio.sleep(0.4)
 
             # Scroll to trigger GraphQL pagination.
             # Uses saturation detection: stop when Meta hasn't returned new GraphQL
@@ -133,7 +133,7 @@ async def scrape_ads(
                 _hard_cap = 12          # streaming: fast first results
             else:
                 _hard_cap = max(40, _max // 5)
-            _scroll_sleep    = 0.6 if on_ad_found else 0.9
+            _scroll_sleep    = 0.4 if on_ad_found else 0.7
             _no_new_streak   = 0   # consecutive scrolls with 0 new GraphQL responses
             _SATURATION_STOP = 3   # stop after this many dry scrolls in a row
             _last_json_count = len(collected_json)
@@ -201,7 +201,7 @@ async def scrape_ads(
                     )
 
             # Extra pause to let final GraphQL responses arrive
-            await asyncio.sleep(3)
+            await asyncio.sleep(1.5)
 
             # Stream any final batches that arrived after the loop
             if on_ad_found and len(collected_json) > _streamed_count:

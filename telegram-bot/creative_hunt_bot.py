@@ -558,7 +558,7 @@ async def _wait_and_show(bot, session: dict) -> None:
         return
 
     ad = None
-    MAX_WAIT = 90   # absolute ceiling in seconds
+    MAX_WAIT = 210  # absolute ceiling in seconds (3.5 min — scraper can be slow)
     POLL     = 5    # check interval
     waited   = 0
 
