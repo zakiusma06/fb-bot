@@ -276,10 +276,10 @@ def load_pending_rows(
         return []
 
 
-def load_pending_keywords() -> list[str]:
+def load_pending_keywords() -> list[dict]:
     """
     Return keywords from PENDING sorted by approval rate (highest first).
-    Approval rate = approved count / (approved + pending count) per keyword.
+    Each entry: {"keyword": str, "count": int}  (count = pending products)
     Falls back to alphabetical sort if APPROVED tab is unavailable.
     """
     try:
@@ -313,7 +313,7 @@ def load_pending_keywords() -> list[str]:
             return a / total if total > 0 else 0.0
 
         all_kws.sort(key=lambda k: (-_approval_rate(k), k))
-        return all_kws
+        return [{"keyword": kw, "count": pending_counts[kw]} for kw in all_kws]
     except Exception as e:
         logger.error(f"[mod_sheet] load_pending_keywords failed: {e}")
         return []

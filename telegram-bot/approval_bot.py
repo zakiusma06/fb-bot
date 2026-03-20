@@ -263,8 +263,14 @@ def _make_filter_panel_keyboard(fs: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def _make_kw_submenu_keyboard(keywords: list[str]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(kw, callback_data=f"fkw_panel:{kw}")] for kw in keywords[:20]]
+def _make_kw_submenu_keyboard(keywords: list[dict]) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(
+            f"{kw['keyword']} ({kw['count']} pending)",
+            callback_data=f"fkw_panel:{kw['keyword']}"
+        )]
+        for kw in keywords[:20]
+    ]
     rows.append([InlineKeyboardButton("⬅ Back to Filters", callback_data="fp:back")])
     return InlineKeyboardMarkup(rows)
 
