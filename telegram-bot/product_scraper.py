@@ -211,17 +211,19 @@ def scrape_product_page(url: str) -> dict:
     # ── Images ─────────────────────────────────────────────────────────────
     candidates = []
 
-    # Strategy 1: Shopify product JSON API (best source — returns all gallery images)
+    # Strategy 1: Shopify product JSON API (best — returns all gallery images, no hash dedup needed)
     shopify_imgs = _shopify_product_images(url)
     if shopify_imgs:
-        candidates.extend(shopify_imgs)
+        # Already clean and unique — skip expensive hash dedup
+        image_urls = shopify_imgs[:5]
+        logger.info(f"[scraper] Using {len(image_urls)} images from Shopify JSON API")
+    else:
+        # Fallback strategies for non-Shopify or failed JSON API
 
-    # Strategy 2: Shopify product JSON embedded in page <script> tags
-    if len(candidates) < 2:
+        # Strategy 2: Shopify JSON embedded in page <script> tags
         for script in soup.find_all("script", type="application/json"):
             try:
                 data = json.loads(script.string or "")
-                # Handle both {"product": {...}} and raw product objects
                 product = data.get("product", data)
                 imgs = product.get("images", product.get("media", []))
                 for img in imgs:
@@ -231,38 +233,36 @@ def scrape_product_page(url: str) -> dict:
             except Exception:
                 pass
 
-    # Strategy 3: og:image meta tags
-    for tag in soup.find_all("meta", property="og:image"):
-        src = (tag.get("content") or "").strip()
-        if src and _is_good_image_url(src):
+        # Strategy 3: og:image meta tags
+        for tag in soup.find_all("meta", property="og:image"):
+            src = (tag.get("content") or "").strip()
+            if src and _is_good_image_url(src):
+                candidates.append(src)
+
+        # Strategy 4: HTML img tags (data-src for lazy-loaded galleries)
+        for img in soup.find_all("img"):
+            src = (
+                img.get("data-src") or
+                img.get("data-lazy-src") or
+                img.get("data-srcset", "").split()[0] or
+                img.get("src") or ""
+            ).strip()
+            if not src:
+                continue
+            if src.startswith("//"):
+                src = "https:" + src
+            if not src.startswith("http"):
+                continue
+            if not _is_good_image_url(src):
+                continue
+            if not _is_good_image_tag(img):
+                continue
             candidates.append(src)
 
-    # Strategy 4: HTML img tags (data-src for lazy-loaded Shopify galleries)
-    for img in soup.find_all("img"):
-        src = (
-            img.get("data-src") or
-            img.get("data-lazy-src") or
-            img.get("data-srcset", "").split()[0] or
-            img.get("src") or ""
-        ).strip()
-        if not src:
-            continue
-        if src.startswith("//"):
-            src = "https:" + src
-        if not src.startswith("http"):
-            continue
-        if not _is_good_image_url(src):
-            continue
-        if not _is_good_image_tag(img):
-            continue
-        candidates.append(src)
-
-    candidates = _dedupe_by_url(candidates)
-
-    logger.info(f"[scraper] {len(candidates)} candidates after URL filter — running hash dedup…")
-    candidates = _dedupe_by_hash(candidates)
-
-    image_urls = candidates[:5]
+        candidates = _dedupe_by_url(candidates)
+        logger.info(f"[scraper] {len(candidates)} candidates after URL dedup — running hash dedup…")
+        candidates = _dedupe_by_hash(candidates)
+        image_urls = candidates[:5]
 
     logger.info(
         f"[scraper] title={title!r}, desc_len={len(description)}, "
