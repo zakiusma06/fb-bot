@@ -148,7 +148,7 @@ def _shopify_product_images(url: str) -> list:
         # Build the .json API URL: /products/<handle>.json
         path = parsed.path.rstrip("/")
         json_url = f"{parsed.scheme}://{parsed.netloc}{path}.json"
-        resp = requests.get(json_url, headers=_HEADERS, timeout=15)
+        resp = requests.get(json_url, headers=_HEADERS, timeout=6)
         if resp.status_code != 200:
             return []
         data = resp.json()
@@ -260,8 +260,6 @@ def scrape_product_page(url: str) -> dict:
             candidates.append(src)
 
         candidates = _dedupe_by_url(candidates)
-        logger.info(f"[scraper] {len(candidates)} candidates after URL dedup — running hash dedup…")
-        candidates = _dedupe_by_hash(candidates)
         image_urls = candidates[:5]
 
     logger.info(
