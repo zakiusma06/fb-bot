@@ -121,7 +121,14 @@ def _get(path: str, params: dict | None = None) -> dict:
     if params:
         p.update(params)
     r = httpx.get(f"{GRAPH_URL}/{path}", params=p, timeout=30)
-    r.raise_for_status()
+    if not r.is_success:
+        try:
+            body = r.json()
+            err = body.get("error", {})
+            logger.error(f"[meta] GET /{path} HTTP {r.status_code} — code={err.get('code')} subcode={err.get('error_subcode')} msg={err.get('message')} type={err.get('type')}")
+        except Exception:
+            logger.error(f"[meta] GET /{path} HTTP {r.status_code} — body={r.text[:300]}")
+        r.raise_for_status()
     result = r.json()
     if "error" in result:
         err = result["error"]
