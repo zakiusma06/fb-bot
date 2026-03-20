@@ -1453,8 +1453,9 @@ def _is_error_status(s: str) -> bool:
 
 
 def _fmt_status(effective_status: str) -> str:
-    """Convert Meta effective_status to a readable emoji label."""
+    """Convert Meta effective_status (or internal sheet status) to a readable emoji label."""
     mapping = {
+        # ── Meta API statuses ──────────────────────────────────────────────
         "ACTIVE":               "🟢 Active",
         "PAUSED":               "⏸ Paused",
         "CAMPAIGN_PAUSED":      "⏸ Paused (campaign)",
@@ -1469,6 +1470,13 @@ def _fmt_status(effective_status: str) -> str:
         "ARCHIVED":             "🗄 Archived",
         "DELETED":              "🗑 Deleted",
         "PREAPPROVED":          "✅ Pre-Approved",
+        "UNKNOWN":              "❔ Unknown",
+        # ── Internal sheet statuses ────────────────────────────────────────
+        "ADS RUNNING":          "🚀 Launched",
+        "ADS ERROR":            "🔴 Launch Error",
+        "PENDING":              "⏳ Pending",
+        "REVIEWED":             "✅ Reviewed",
+        "REJECTED":             "🚫 Rejected",
     }
     return mapping.get(effective_status.upper(), f"❓ {effective_status}")
 

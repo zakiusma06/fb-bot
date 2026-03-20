@@ -122,7 +122,14 @@ def _get(path: str, params: dict | None = None) -> dict:
         p.update(params)
     r = httpx.get(f"{GRAPH_URL}/{path}", params=p, timeout=30)
     r.raise_for_status()
-    return r.json()
+    result = r.json()
+    if "error" in result:
+        err = result["error"]
+        msg = err.get("message", str(err))
+        subcode = err.get("error_subcode", "")
+        logger.error(f"[meta] GET /{path} API error — code={err.get('code')} subcode={subcode} msg={msg}")
+        raise RuntimeError(f"Meta API error: {msg}")
+    return result
 
 
 def _post(path: str, data: dict, files=None, base: str | None = None) -> dict:
