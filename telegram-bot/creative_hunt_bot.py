@@ -189,6 +189,7 @@ def _candidate_keyboard(sku: str, cand_idx: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("❌ REJECT",           callback_data=f"ch_reject:{tag}"),
         ],
         [
+            InlineKeyboardButton("🔍 New Keyword",     callback_data=f"ch_new_kw:{sku}"),
             InlineKeyboardButton("✏️ Add Manually",    callback_data=f"ch_manual_add:{sku}"),
         ],
         [
@@ -828,6 +829,27 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             return
 
+    # ── Capture new keyword to restart search mid-session ─────────────────
+    if session and session.get("setup_step") == "await_new_kw":
+        if not text or text in (_BTN_HUNT, _BTN_STOP, _BTN_HELP):
+            await update.message.reply_text("Please type the keyword to search:")
+            return
+
+        session["setup_step"]      = None
+        session["current_keyword"] = text
+        # Cancel current search
+        session["search_cancelled"] = True
+        if session.get("search_task") and not session["search_task"].done():
+            session["search_task"].cancel()
+
+        await update.message.reply_text(
+            f"🔍 Searching with new keyword: <b>{_esc(text)}</b>…",
+            parse_mode="HTML",
+        )
+        # Restart search with new keyword
+        await _run_search_and_show(context.bot, session)
+        return
+
     # ── Capture custom keyword typed by user for the current product ───────
     if session and session.get("setup_step") == "await_product_kw":
         if not text or text in (_BTN_HUNT, _BTN_STOP, _BTN_HELP):
@@ -864,6 +886,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     data    = query.data or ""
+
+    # ── Search with a new keyword ─────────────────────────────────────────
+    if data.startswith("ch_new_kw:"):
+        session = _sessions.get(user_id)
+        if not session:
+            await query.edit_message_text("⚠️ Session expired. Tap 🎬 Start Creative Hunt.")
+            return
+        session["setup_step"] = "await_new_kw"
+        await query.message.reply_text(
+            "🔍 Type the new keyword to search for this product:"
+        )
+        return
 
     # ── Manual creative add ───────────────────────────────────────────────
     if data.startswith("ch_manual_add:"):
