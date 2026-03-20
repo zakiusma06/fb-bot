@@ -276,6 +276,47 @@ def load_pending_rows(
         return []
 
 
+def load_pending_filter_counts() -> dict:
+    """
+    Return pending product counts broken down by price range and variants.
+    Returns:
+      {
+        "total":    int,
+        "price":    {"under5": int, "5to10": int, "10to20": int, "20plus": int},
+        "variants": {"yes": int, "no": int},
+      }
+    """
+    try:
+        client = _get_client()
+        spreadsheet = _open_spreadsheet(client)
+        pending_ws = _ensure_tab(spreadsheet, "PENDING")
+        rows = pending_ws.get_all_records()
+
+        price_counts   = {"under5": 0, "5to10": 0, "10to20": 0, "20plus": 0}
+        variant_counts = {"yes": 0, "no": 0}
+
+        for row in rows:
+            try:
+                raw = str(row.get("SOURCING PRICE USD", "") or "").strip().replace("$", "").replace(",", "")
+                price = float(raw) if raw else None
+                if price is not None:
+                    if price < 5:    price_counts["under5"] += 1
+                    elif price < 10: price_counts["5to10"]  += 1
+                    elif price < 20: price_counts["10to20"] += 1
+                    else:            price_counts["20plus"]  += 1
+            except (ValueError, TypeError):
+                pass
+
+            hv = (row.get("HAS VARIANTS") or "").strip().upper()
+            if hv == "YES":  variant_counts["yes"] += 1
+            elif hv == "NO": variant_counts["no"]  += 1
+
+        return {"total": len(rows), "price": price_counts, "variants": variant_counts}
+    except Exception as e:
+        logger.error(f"[mod_sheet] load_pending_filter_counts failed: {e}")
+        return {"total": 0, "price": {}, "variants": {}}
+
+
 def load_pending_keywords() -> list[dict]:
     """
     Return keywords from PENDING sorted by approval rate (highest first).

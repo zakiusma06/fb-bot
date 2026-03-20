@@ -49,6 +49,7 @@ from telegram.ext import (
 from mod_sheet import (
     load_pending_rows,
     load_pending_keywords,
+    load_pending_filter_counts,
     move_row,
     get_statistics,
     update_sourcing_data,
@@ -250,14 +251,35 @@ def _make_filter_panel_text(fs: dict) -> str:
     return "🔍 *Configure filters* _(all optional)_\n\nTap a button to set a filter, then tap *Apply*:"
 
 
-def _make_filter_panel_keyboard(fs: dict) -> InlineKeyboardMarkup:
-    price_btn   = _PRICE_LABELS.get(fs.get("price_range", ""), "💲 Price: ALL")
-    variant_btn = _VARIANT_LABELS.get(fs.get("variants", ""), "🔀 Variants: ALL")
-    kw_val      = fs.get("keyword", "")
-    kw_btn      = f"🔑 {kw_val[:18]}" if kw_val else "🔑 Keyword: ALL"
+def _make_filter_panel_keyboard(fs: dict, counts: dict = None) -> InlineKeyboardMarkup:
+    counts = counts or {}
+    pc = counts.get("price", {})
+    vc = counts.get("variants", {})
+    total = counts.get("total", 0)
+
+    # Price button
+    pr = fs.get("price_range", "")
+    price_label = _PRICE_LABELS.get(pr, "💲 Price: ALL")
+    if pr and pc.get(pr) is not None:
+        price_label += f" ({pc[pr]} pending)"
+    elif not pr and total:
+        price_label += f" ({total} pending)"
+
+    # Variants button
+    vr = fs.get("variants", "")
+    var_label = _VARIANT_LABELS.get(vr, "🔀 Variants: ALL")
+    if vr and vc.get(vr) is not None:
+        var_label += f" ({vc[vr]} pending)"
+    elif not vr and total:
+        var_label += f" ({total} pending)"
+
+    # Keyword button
+    kw_val = fs.get("keyword", "")
+    kw_btn = f"🔑 {kw_val[:18]}" if kw_val else "🔑 Keyword: ALL"
+
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(price_btn,   callback_data="fp:cycle_price")],
-        [InlineKeyboardButton(variant_btn, callback_data="fp:cycle_variants")],
+        [InlineKeyboardButton(price_label, callback_data="fp:cycle_price")],
+        [InlineKeyboardButton(var_label,   callback_data="fp:cycle_variants")],
         [InlineKeyboardButton(kw_btn,      callback_data="fp:pick_kw")],
         [InlineKeyboardButton("✅ Apply / Start Review", callback_data="fp:apply")],
     ])
@@ -287,10 +309,11 @@ def _make_duplicate_keyboard(sku: str, matched_product) -> InlineKeyboardMarkup:
 async def _show_filter_panel(query, user_id: int) -> None:
     fs = _filter_sessions.get(user_id, _default_filter_state())
     _filter_sessions[user_id] = fs
+    counts = await asyncio.get_event_loop().run_in_executor(None, load_pending_filter_counts)
     await query.edit_message_text(
         _make_filter_panel_text(fs),
         parse_mode="Markdown",
-        reply_markup=_make_filter_panel_keyboard(fs),
+        reply_markup=_make_filter_panel_keyboard(fs, counts),
     )
 
 
@@ -586,10 +609,11 @@ async def cmd_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     _filter_sessions[user_id] = _default_filter_state()
     fs = _filter_sessions[user_id]
+    counts = await asyncio.get_event_loop().run_in_executor(None, load_pending_filter_counts)
     await update.message.reply_text(
         _make_filter_panel_text(fs),
         parse_mode="Markdown",
-        reply_markup=_make_filter_panel_keyboard(fs),
+        reply_markup=_make_filter_panel_keyboard(fs, counts),
     )
 
 
