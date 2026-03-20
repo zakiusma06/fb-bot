@@ -55,6 +55,7 @@ from mod_sheet import (
     update_pending_fields,
 )
 from shopify_pipeline import run_pipeline
+import shopify_client
 from config import USD_TO_GNF, ROUND_TO_GNF
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,10 @@ _filter_sessions: dict[int, dict] = {}
 #   "panel_msg_id": int | None,
 # }
 _shopify_pending: dict[int, dict] = {}
+
+# ── Manual photo upload state ──────────────────────────────────────────────
+# user_id → list of Telegram file_ids collected so far
+_awaiting_photos: dict[int, list] = {}
 
 _PRICE_RANGE_CYCLE = ["", "under5", "5to10", "10to20", "20plus"]
 _VARIANTS_CYCLE    = ["", "yes", "no"]
@@ -194,14 +199,18 @@ def _make_product_keyboard(sku: str, has_price: bool, has_compare: bool) -> Inli
     ])
 
 
-def _make_control_panel_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ APPROVE PRODUCT",      callback_data="cp_approve")],
-        [
-            InlineKeyboardButton("🔄 REGENERATE",         callback_data="cp_regen"),
-            InlineKeyboardButton("⏭ Skip (keep pending)", callback_data="cp_skip"),
-        ],
+def _make_control_panel_keyboard(image_count: int = 1) -> InlineKeyboardMarkup:
+    rows = []
+    if image_count == 0:
+        rows.append([InlineKeyboardButton("📷 No images — Add manually", callback_data="cp_add_photos")])
+    else:
+        rows.append([InlineKeyboardButton("📷 Add more images", callback_data="cp_add_photos")])
+    rows.append([InlineKeyboardButton("✅ APPROVE PRODUCT", callback_data="cp_approve")])
+    rows.append([
+        InlineKeyboardButton("🔄 REGENERATE",         callback_data="cp_regen"),
+        InlineKeyboardButton("⏭ Skip (keep pending)", callback_data="cp_skip"),
     ])
+    return InlineKeyboardMarkup(rows)
 
 
 def _make_regen_keyboard(images: list) -> InlineKeyboardMarkup:
@@ -439,15 +448,17 @@ async def _send_control_panel(bot, chat_id: int, user_id: int) -> None:
             pass
 
     images = pending.get("images", [])
+    img_count = len(images)
+    img_line = f"🖼 <b>Images:</b> {img_count}" if img_count > 0 else "🖼 <b>Images:</b> None — tap below to add manually"
     msg = await bot.send_message(
         chat_id=chat_id,
         text=(
             f"🚀 <b>Shopify product created!</b>\n\n"
             f"📝 <b>Title:</b> {_esc(pending['title'])}\n\n"
             f"🌐 <b>Storefront link:</b>\n{_esc(pending['store_url'])}\n\n"
-            f"🖼 <b>Images:</b> {len(images)}"
+            f"{img_line}"
         ),
-        reply_markup=_make_control_panel_keyboard(),
+        reply_markup=_make_control_panel_keyboard(image_count=img_count),
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
@@ -607,6 +618,33 @@ async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ── Text input handler ────────────────────────────────────────────────────
+
+async def handle_photo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photos sent by user for manual product image upload."""
+    user_id = update.effective_user.id
+    if user_id not in _awaiting_photos:
+        return  # Not in photo collection mode — ignore
+
+    photos = _awaiting_photos[user_id]
+    if len(photos) >= 5:
+        await update.message.reply_text("Maximum 5 photos reached. Tap ✅ Done to upload.")
+        return
+
+    # Take the highest-resolution version of the photo
+    photo = update.message.photo[-1]
+    photos.append(photo.file_id)
+    n = len(photos)
+
+    await update.message.reply_text(
+        f"✅ Photo {n}/5 received.",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                f"✅ Done ({n} photo{'s' if n > 1 else ''})",
+                callback_data="cp_photos_done"
+            )
+        ]]),
+    )
+
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1237,10 +1275,55 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         try:
             await query.edit_message_reply_markup(
-                reply_markup=_make_control_panel_keyboard()
+                reply_markup=_make_control_panel_keyboard(image_count=len(pending.get("images", [])))
             )
         except Exception:
             pass
+        return
+
+    # ── Add images manually ────────────────────────────────────────────────
+    if data == "cp_add_photos":
+        if not pending:
+            await query.answer("No active Shopify product.", show_alert=True)
+            return
+        _awaiting_photos[user_id] = []
+        await query.answer()
+        await query.message.reply_text(
+            "📷 Send me your photos one by one (up to 5).\n"
+            "Each photo you send will be added to the product.\n"
+            "Tap <b>✅ Done</b> when finished.",
+            parse_mode="HTML",
+        )
+        return
+
+    # ── Done collecting photos ─────────────────────────────────────────────
+    if data == "cp_photos_done":
+        pending = _shopify_pending.get(user_id)
+        file_ids = _awaiting_photos.pop(user_id, [])
+        if not pending or not file_ids:
+            await query.answer("No photos to upload.", show_alert=True)
+            return
+        await query.answer()
+        await query.message.reply_text(f"⬆️ Uploading {len(file_ids)} photo(s) to Shopify…")
+        product_id = pending["product_id"]
+        uploaded = []
+        for file_id in file_ids:
+            try:
+                tg_file = await context.bot.get_file(file_id)
+                img_bytes = bytes(await tg_file.download_as_bytearray())
+                img_dict = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda b=img_bytes: shopify_client.upload_image_bytes_to_product(product_id, b)
+                )
+                uploaded.append(img_dict)
+            except Exception as e:
+                logger.error(f"[approval] Failed to upload manual photo: {e}")
+        pending["images"].extend(uploaded)
+        img_count = len(pending["images"])
+        await query.message.reply_text(
+            f"✅ {len(uploaded)} image(s) added! Product now has {img_count} image(s)."
+        )
+        await _send_control_panel(context.bot, query.message.chat_id, user_id)
         return
 
     # ── Regen: change title ────────────────────────────────────────────────
@@ -1306,6 +1389,7 @@ def build_approval_application() -> Application:
     app.add_handler(CommandHandler("stats",  cmd_stats))
     app.add_handler(CommandHandler("stop",   cmd_stop))
     app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo_input))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
 
     return app

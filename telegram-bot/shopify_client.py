@@ -171,6 +171,28 @@ def update_product_field(
         return False
 
 
+def upload_image_bytes_to_product(product_id: int, image_bytes: bytes, position: int = None) -> dict:
+    """
+    Upload raw image bytes (e.g. from Telegram) to an existing Shopify product.
+    Returns {"id": int, "src": str, "position": int} or raises on failure.
+    """
+    import base64
+    b64 = base64.b64encode(image_bytes).decode()
+    payload: dict = {"image": {"attachment": b64}}
+    if position is not None:
+        payload["image"]["position"] = position
+    resp = requests.post(
+        f"{_base_url()}/products/{product_id}/images.json",
+        json=payload,
+        headers=_headers(),
+        timeout=30,
+    )
+    resp.raise_for_status()
+    img = resp.json()["image"]
+    logger.info(f"[shopify] Uploaded manual image to product {product_id}: id={img['id']}")
+    return {"id": img["id"], "src": img["src"], "position": img.get("position", 1)}
+
+
 def delete_product_image(product_id: int, image_id: int) -> bool:
     """Delete a single image from a Shopify product."""
     try:
