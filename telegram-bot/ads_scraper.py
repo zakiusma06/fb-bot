@@ -102,25 +102,25 @@ async def scrape_ads(
             # Warm up the session by visiting facebook.com first.
             # Going cold directly to the Ads Library triggers the login wall even with valid cookies.
             await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(0.8)
             await _handle_dialogs(page)
 
             # Navigate directly to the Ads Library search URL
             search_url = _build_search_url(keyword, country_code, active_filter)
             await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
             try:
-                await page.wait_for_load_state("networkidle", timeout=8000)
+                await page.wait_for_load_state("networkidle", timeout=5000)
             except Exception:
                 pass
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(0.8)
 
             # Handle cookie/login dialogs
             await _handle_dialogs(page)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
 
-            # Click "All ads" category if a category selector is visible  
+            # Click "All ads" category if a category selector is visible
             await _select_all_ads_category(page)
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.6)
 
             # Scroll to trigger GraphQL pagination.
             # Uses saturation detection: stop when Meta hasn't returned new GraphQL
@@ -133,7 +133,7 @@ async def scrape_ads(
                 _hard_cap = 12          # streaming: fast first results
             else:
                 _hard_cap = max(40, _max // 5)
-            _scroll_sleep    = 1.0 if on_ad_found else 1.5
+            _scroll_sleep    = 0.6 if on_ad_found else 0.9
             _no_new_streak   = 0   # consecutive scrolls with 0 new GraphQL responses
             _SATURATION_STOP = 3   # stop after this many dry scrolls in a row
             _last_json_count = len(collected_json)
