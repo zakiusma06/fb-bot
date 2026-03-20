@@ -1486,6 +1486,7 @@ async def _fetch_stats_card(uid: int, sku: str, loop) -> tuple[str, InlineKeyboa
     row = _stats_sessions.get(uid, {}).get("data", {}).get(sku, {})
     name        = row.get("CAMPAIGN NAME") or row.get("PRODUCT NAME", "?")
     campaign_id = row.get("META CAMPAIGN ID", "").strip()
+    logger.info(f"[stats] {sku} — campaign_id={repr(campaign_id)} statu={repr(row.get('STATU',''))} row_keys={list(row.keys())}")
 
     spend   = row.get("SPEND",               "") or "—"
     results = row.get("RESULTS",             "") or "—"
