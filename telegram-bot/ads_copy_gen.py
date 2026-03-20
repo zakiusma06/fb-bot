@@ -168,22 +168,64 @@ def fallback_copy(product_name: str, price: str, language: str, n_texts: int, n_
     return _fallback_copy(product_name, price, language, n_texts, n_headlines)
 
 
+_FALLBACK_TEMPLATES = {
+    "fr": {
+        "texts": [
+            "✨ Découvrez {product_name}. Commandez dès maintenant !",
+            "🎯 {product_name} — qualité garantie, livraison rapide. Seulement {price} !",
+            "Ne manquez pas {product_name}. Stock limité !",
+            "Transformez votre quotidien avec {product_name}. Achetez maintenant.",
+            "{product_name} — la solution qu'il vous faut. Commandez aujourd'hui !",
+        ],
+        "headlines": [
+            "Obtenez {product_name} maintenant",
+            "Seulement {price} — Commandez aujourd'hui",
+            "Achetez {product_name}",
+            "Offre limitée — {price}",
+            "Livraison rapide disponible",
+        ],
+    },
+    "en": {
+        "texts": [
+            "✨ Discover {product_name}. Order yours today!",
+            "🎯 Looking for {product_name}? Get yours now for only {price}.",
+            "Don't miss out on {product_name}. Limited stock available!",
+            "Transform your life with {product_name}. Shop now.",
+            "{product_name} — trusted quality, fast delivery.",
+        ],
+        "headlines": [
+            "Get {product_name} Now",
+            "Only {price} — Order Today",
+            "Shop {product_name}",
+            "Limited Offer — {price}",
+            "Fast Delivery Available",
+        ],
+    },
+    "ar": {
+        "texts": [
+            "✨ اكتشف {product_name}. اطلبه الآن!",
+            "🎯 {product_name} — جودة مضمونة وتوصيل سريع. بسعر {price} فقط!",
+            "لا تفوّت {product_name}. الكمية محدودة!",
+            "غيّر حياتك مع {product_name}. اشترِ الآن.",
+            "{product_name} — الحل الذي تحتاجه. اطلبه اليوم!",
+        ],
+        "headlines": [
+            "احصل على {product_name} الآن",
+            "فقط {price} — اطلب اليوم",
+            "تسوّق {product_name}",
+            "عرض محدود — {price}",
+            "توصيل سريع متاح",
+        ],
+    },
+}
+
+
 def _fallback_copy(product_name: str, price: str, language: str, n_texts: int, n_headlines: int) -> dict:
     logger.info("[ads_copy_gen] Using fallback template copy")
-    texts = [
-        f"Discover {product_name}. Order yours today!",
-        f"Looking for {product_name}? Get yours now for only {price}.",
-        f"{product_name} — trusted quality, fast delivery.",
-        f"Don't miss out on {product_name}. Limited stock available!",
-        f"Transform your life with {product_name}. Shop now.",
-    ]
-    heads = [
-        f"Get {product_name} Now",
-        f"Only {price} — Order Today",
-        f"Shop {product_name}",
-        f"Limited Offer — {price}",
-        f"Fast Delivery Available",
-    ]
+    lang_key = (language or "fr").lower()[:2]
+    templates = _FALLBACK_TEMPLATES.get(lang_key, _FALLBACK_TEMPLATES["fr"])
+    texts = [t.format(product_name=product_name, price=price) for t in templates["texts"]]
+    heads = [h.format(product_name=product_name, price=price) for h in templates["headlines"]]
     return {
         "primary_texts": texts[:n_texts],
         "headlines":     heads[:n_headlines],
