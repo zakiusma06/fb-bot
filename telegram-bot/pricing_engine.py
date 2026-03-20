@@ -281,17 +281,19 @@ async def get_sourcing_for_cluster(cluster) -> tuple[str, str, str]:
     # ── Weight extraction: resolve URL then scrape 1688 ──────────────────────
     weight_gram_str = ""
     if supplier_url:
+        logger.info(f"[sourcing] supplier_url for weight: {supplier_url[:100]}")
         try:
-            # supplier_url may be a fatkun URL — resolve it to the real 1688 URL first
             url_for_weight = await asyncio.wait_for(
                 _resolve_to_1688_url(supplier_url), timeout=15
             )
+            logger.info(f"[sourcing] resolved URL: {url_for_weight[:100]}")
             if url_for_weight and "1688.com" in url_for_weight:
                 weight_gram_str = await asyncio.wait_for(
                     _extract_weight_from_1688(url_for_weight), timeout=30
                 )
-                if weight_gram_str:
-                    logger.info(f"[sourcing] weight: {weight_gram_str}g from {url_for_weight[:60]}")
+                logger.info(f"[sourcing] weight result: '{weight_gram_str}'")
+            else:
+                logger.info("[sourcing] could not resolve to 1688 URL — skipping weight")
         except Exception as e:
             logger.warning(f"[sourcing] weight extraction failed: {e}")
 
