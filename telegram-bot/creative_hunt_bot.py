@@ -1284,7 +1284,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _show_candidate(context.bot, session)
         return
 
-    # ── SAVE AS NEW PENDING PRODUCT (full pipeline) ───────────────────────
+    # ── SAVE AS NEW PENDING PRODUCT (background — hunt continues immediately)
     if action == "ch_save_pending":
         ad = session.get("current_ad")
         if not ad:
@@ -1295,93 +1295,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ad_library_url   = str(ad.get("ad_library_url", "")).strip()
         landing_page_url = str(ad.get("landing_page_url", "")).strip()
         keyword          = str(session["products"][session["product_idx"]].get("KEYWORD", "")).strip()
+        chat_id          = session["chat_id"]
 
         if not ad_library_url and not landing_page_url:
             await query.message.reply_text("⚠️ No URL found for this creative — cannot save.")
             await _show_candidate(context.bot, session)
             return
 
+        # Acknowledge immediately — pipeline runs in background
         await query.message.reply_text(
-            "📌 <b>Saving product…</b>\n⏳ Scraping product page…",
+            "📌 <b>Saving product in background…</b>\nYou'll get a notification when done.",
             parse_mode="HTML",
         )
 
-        try:
-            loop = asyncio.get_event_loop()
+        # Fire-and-forget background task
+        asyncio.create_task(
+            _bg_save_pending_product(context.bot, chat_id, ad_library_url, landing_page_url, keyword)
+        )
 
-            # Step 1: scrape product page
-            scraped = {}
-            if landing_page_url:
-                try:
-                    scraped = await asyncio.wait_for(
-                        loop.run_in_executor(None, lambda: scrape_product_page(landing_page_url)),
-                        timeout=25,
-                    )
-                except Exception as _se:
-                    logger.warning(f"[creative_hunt] product page scrape failed: {_se}")
-
-            product_name = scraped.get("title", "").strip()
-            image_urls   = scraped.get("image_urls", [])
-
-            # Step 2: sourcing (build minimal duck-typed cluster)
-            await query.message.reply_text("🔍 Looking up sourcing price…", parse_mode="HTML")
-
-            class _MinimalCluster:
-                canonical_name = product_name
-                ads = [{
-                    "_product_images":  image_urls,
-                    "og_image_url":     image_urls[0] if image_urls else "",
-                    "landing_page_url": landing_page_url,
-                }]
-
-            sourcing_usd = sourcing_url = weight_gram = ""
-            try:
-                sourcing_usd, sourcing_url, weight_gram = await asyncio.wait_for(
-                    get_sourcing_for_cluster(_MinimalCluster()),
-                    timeout=90,
-                )
-            except Exception as _se:
-                logger.warning(f"[creative_hunt] sourcing failed: {_se}")
-
-            # Step 3: generate SKU and save
-            new_sku_num = await loop.run_in_executor(None, get_next_sku_number)
-            new_sku     = f"PRD-{new_sku_num:04d}"
-
-            row = {
-                "SKU":                   new_sku,
-                "KEYWORD":               keyword,
-                "URL PRODUCT":           landing_page_url,
-                "URL LANDING PAGE":      landing_page_url,
-                "ADS LIBRARY MEDIA URL": ad_library_url,
-                "PRODUCT NAME":          product_name,
-                "IMAGE URL":             image_urls[0] if image_urls else "",
-                "SOURCING PRICE USD":    sourcing_usd,
-                "SOURCING URL":          sourcing_url,
-                "WEIGHT GRAM":           weight_gram,
-                "STATU":                 "PENDING",
-            }
-            await loop.run_in_executor(None, lambda: append_cluster_rows([row]))
-
-            sourcing_display = f"${sourcing_usd}" if sourcing_usd else "not found"
-            weight_display   = f"{weight_gram}g"  if weight_gram  else "—"
-
-            await query.message.reply_text(
-                f"✅ <b>New product saved to PENDING!</b>\n\n"
-                f"🔖 SKU: <code>{new_sku}</code>\n"
-                f"🛍 Name: {_esc(product_name) or '—'}\n"
-                f"💰 Sourcing: {sourcing_display}\n"
-                f"⚖️ Weight: {weight_display}\n"
-                f"🔗 {_esc(landing_page_url) if landing_page_url else '—'}",
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-            )
-            logger.info(f"[creative_hunt] Saved new pending product {new_sku} — sourcing={sourcing_usd} url={landing_page_url}")
-
-        except Exception as e:
-            logger.error(f"[creative_hunt] Failed to save pending product: {e}", exc_info=True)
-            await query.message.reply_text(f"❌ Failed to save: {e}")
-
-        # Creative hunt continues — skip this creative and show next candidate
+        # Creative hunt continues immediately — show next candidate
         await _show_candidate(context.bot, session)
         return
 
@@ -1389,6 +1321,101 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "ch_reject":
         await _show_candidate(context.bot, session)
         return
+
+
+# ── Background: save pending product pipeline ────────────────────────────
+
+async def _bg_save_pending_product(
+    bot,
+    chat_id:         int,
+    ad_library_url:  str,
+    landing_page_url: str,
+    keyword:         str,
+) -> None:
+    """
+    Runs the full product-research pipeline in the background:
+      1. Scrape product page (title + images)
+      2. Sourcing lookup (price, URL, weight)
+      3. Generate SKU and save to PENDING sheet
+    Sends a completion notification to chat_id when done.
+    """
+    loop = asyncio.get_event_loop()
+
+    async def _notify(text: str):
+        try:
+            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML",
+                                   disable_web_page_preview=True)
+        except Exception:
+            pass
+
+    try:
+        # Step 1: scrape product page
+        scraped = {}
+        if landing_page_url:
+            try:
+                scraped = await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: scrape_product_page(landing_page_url)),
+                    timeout=25,
+                )
+            except Exception as _se:
+                logger.warning(f"[bg_save_pending] scrape failed: {_se}")
+
+        product_name = scraped.get("title", "").strip()
+        image_urls   = scraped.get("image_urls", [])
+
+        # Step 2: sourcing
+        class _MinimalCluster:
+            canonical_name = product_name
+            ads = [{
+                "_product_images":  image_urls,
+                "og_image_url":     image_urls[0] if image_urls else "",
+                "landing_page_url": landing_page_url,
+            }]
+
+        sourcing_usd = sourcing_url = weight_gram = ""
+        try:
+            sourcing_usd, sourcing_url, weight_gram = await asyncio.wait_for(
+                get_sourcing_for_cluster(_MinimalCluster()),
+                timeout=90,
+            )
+        except Exception as _se:
+            logger.warning(f"[bg_save_pending] sourcing failed: {_se}")
+
+        # Step 3: generate SKU and save
+        new_sku_num = await loop.run_in_executor(None, get_next_sku_number)
+        new_sku     = f"PRD-{new_sku_num:04d}"
+
+        row = {
+            "SKU":                   new_sku,
+            "KEYWORD":               keyword,
+            "URL PRODUCT":           landing_page_url,
+            "URL LANDING PAGE":      landing_page_url,
+            "ADS LIBRARY MEDIA URL": ad_library_url,
+            "PRODUCT NAME":          product_name,
+            "IMAGE URL":             image_urls[0] if image_urls else "",
+            "SOURCING PRICE USD":    sourcing_usd,
+            "SOURCING URL":          sourcing_url,
+            "WEIGHT GRAM":           weight_gram,
+            "STATU":                 "PENDING",
+        }
+        await loop.run_in_executor(None, lambda: append_cluster_rows([row]))
+
+        sourcing_display = f"${sourcing_usd}" if sourcing_usd else "not found"
+        weight_display   = f"{weight_gram}g"  if weight_gram  else "—"
+
+        await _notify(
+            f"✅ <b>New product saved to PENDING!</b>\n\n"
+            f"🔖 SKU: <code>{new_sku}</code>\n"
+            f"🛍 Name: {_esc(product_name) or '—'}\n"
+            f"💰 Sourcing: {sourcing_display}\n"
+            f"⚖️ Weight: {weight_display}\n"
+            f"🔗 {_esc(landing_page_url) if landing_page_url else '—'}"
+        )
+        logger.info(f"[bg_save_pending] Saved {new_sku} — sourcing={sourcing_usd} url={landing_page_url}")
+
+    except Exception as e:
+        logger.error(f"[bg_save_pending] Failed: {e}", exc_info=True)
+        await _notify(f"❌ Failed to save product: {e}")
 
 
 # ── Application builder ───────────────────────────────────────────────────
