@@ -1325,30 +1325,61 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Background: save pending product pipeline ────────────────────────────
 
+def _load_fb_bot_chat_id() -> int | None:
+    """Read the ads-launch-bot chat ID from the shared file it writes on startup."""
+    try:
+        chat_id_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ads_monitor_chatid.txt")
+        with open(chat_id_file) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
 async def _bg_save_pending_product(
     bot,
-    chat_id:         int,
-    ad_library_url:  str,
+    chat_id:          int,
+    ad_library_url:   str,
     landing_page_url: str,
-    keyword:         str,
+    keyword:          str,
 ) -> None:
     """
     Runs the full product-research pipeline in the background:
       1. Scrape product page (title + images)
       2. Sourcing lookup (price, URL, weight)
       3. Generate SKU and save to PENDING sheet
-    Sends a completion notification to chat_id when done.
+    Progress + result are sent to the FB Ads bot chat (ads-launch-bot).
+    Falls back to creative-hunt-bot chat if fb-bot chat ID is unavailable.
     """
+    from telegram import Bot as TGBot
+
     loop = asyncio.get_event_loop()
+
+    # Prefer sending to the fb-bot (ads-launch-bot) chat
+    fb_token   = os.environ.get("TELEGRAM_ADS_LAUNCH_BOT_TOKEN", "")
+    fb_chat_id = _load_fb_bot_chat_id()
+
+    if fb_token and fb_chat_id:
+        fb_bot = TGBot(token=fb_token)
+        notify_bot     = fb_bot
+        notify_chat_id = fb_chat_id
+    else:
+        # Fallback: use the creative-hunt-bot chat
+        notify_bot     = bot
+        notify_chat_id = chat_id
+        logger.warning("[bg_save_pending] fb-bot token/chat_id not found — notifying in creative-hunt chat")
 
     async def _notify(text: str):
         try:
-            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML",
-                                   disable_web_page_preview=True)
-        except Exception:
-            pass
+            await notify_bot.send_message(
+                chat_id=notify_chat_id, text=text,
+                parse_mode="HTML", disable_web_page_preview=True,
+            )
+        except Exception as _e:
+            logger.warning(f"[bg_save_pending] notify failed: {_e}")
 
     try:
+        await _notify("📌 <b>New product — saving in progress…</b>\n⏳ Step 1/3 — Scraping product page…")
+
         # Step 1: scrape product page
         scraped = {}
         if landing_page_url:
@@ -1362,6 +1393,12 @@ async def _bg_save_pending_product(
 
         product_name = scraped.get("title", "").strip()
         image_urls   = scraped.get("image_urls", [])
+
+        await _notify(
+            f"🔍 Step 2/3 — Looking up sourcing price…\n"
+            f"🛍 Product: {_esc(product_name) or '—'}\n"
+            f"🖼 Images found: {len(image_urls)}"
+        )
 
         # Step 2: sourcing
         class _MinimalCluster:
@@ -1380,6 +1417,8 @@ async def _bg_save_pending_product(
             )
         except Exception as _se:
             logger.warning(f"[bg_save_pending] sourcing failed: {_se}")
+
+        await _notify("💾 Step 3/3 — Saving to PENDING sheet…")
 
         # Step 3: generate SKU and save
         new_sku_num = await loop.run_in_executor(None, get_next_sku_number)
