@@ -532,8 +532,6 @@ async def _show_product(update: Update, s: dict):
         f"<b>SKU:</b> <code>{sku}</code>\n"
         f"<b>Name:</b> {name}\n"
         f"<b>Price:</b> {price}  |  <b>Compare At:</b> {compare_at}\n"
-        f"<b>Product URL:</b> {url}\n"
-        f"<b>Landing Page:</b> {landing}\n"
         f"<b>Keyword:</b> {keyword}\n"
         + (f"<b>Note:</b> {note}\n" if note else "")
         + creatives_text
@@ -1105,9 +1103,7 @@ async def _show_final_summary(update: Update, s: dict):
         "📋 *FINAL SUMMARY — Review before publishing*\n\n"
         f"*Campaign / Ad Set / Ad Name:*\n`{campaign_name}`\n\n"
         f"*Product:* {p.get('PRODUCT NAME', '—')}\n"
-        f"*SKU:* `{sku}`\n"
-        f"*Product URL:* {p.get('URL PRODUCT', '—')}\n"
-        f"*Landing Page:* {p.get('URL LANDING PAGE', '—')}\n\n"
+        f"*SKU:* `{sku}`\n\n"
         f"*Ad Type:* `{ad_type}` ({len(s['selected_urls'])} creative(s))\n"
         f"*Selected Creatives:*\n" + "\n".join(f"  • {u}" for u in s["selected_urls"]) + "\n\n"
         f"*Primary Texts ({len(s['selected_text'])}):*\n"
