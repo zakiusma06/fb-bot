@@ -1355,14 +1355,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Background: save pending product pipeline ────────────────────────────
 
-def _load_research_bot_chat_id() -> int | None:
-    """Read the research bot chat ID from the shared file it writes on /start."""
-    try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "research_chatid.txt")
-        with open(path) as f:
-            return int(f.read().strip())
-    except Exception:
-        return None
 
 
 async def _bg_save_pending_product(
@@ -1384,18 +1376,17 @@ async def _bg_save_pending_product(
 
     loop = asyncio.get_event_loop()
 
-    # Send progress to the research bot chat
-    research_token   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    research_chat_id = _load_research_bot_chat_id()
-
-    if research_token and research_chat_id:
+    # The user's Telegram chat_id is the same across all bots — just use the
+    # research bot token to send to the same chat_id from the creative-hunt session.
+    research_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if research_token:
         notify_bot     = TGBot(token=research_token)
-        notify_chat_id = research_chat_id
+        notify_chat_id = chat_id   # same Telegram user ID
     else:
-        # Fallback: use the creative-hunt-bot chat
+        # Fallback: send via the creative-hunt-bot itself
         notify_bot     = bot
         notify_chat_id = chat_id
-        logger.warning("[bg_save_pending] research bot token/chat_id not found — notifying in creative-hunt chat")
+        logger.warning("[bg_save_pending] TELEGRAM_BOT_TOKEN not set — notifying in creative-hunt chat")
 
     async def _notify(text: str):
         try:
