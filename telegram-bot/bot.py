@@ -252,7 +252,17 @@ async def _post_init(application: Application) -> None:
 
 # ── Simple commands ────────────────────────────────────────────────────────
 
+def _save_research_chat_id(chat_id: int) -> None:
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "research_chatid.txt")
+        with open(path, "w") as f:
+            f.write(str(chat_id))
+    except Exception:
+        pass
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _save_research_chat_id(update.effective_chat.id)
     fb_ok = "✅" if FACEBOOK_COOKIES else "❌"
     await update.message.reply_text(
         "👋 Welcome to the *Meta Ads Research Bot*!\n\n"
