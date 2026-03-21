@@ -38,6 +38,7 @@ from telegram.ext import (
     filters,
 )
 
+from sheet_writer import get_next_sku_number, append_cluster_rows
 from creative_hunt_sheet import (
     load_approved_products,
     save_creative,
@@ -185,19 +186,22 @@ def _candidate_keyboard(sku: str, cand_idx: int) -> InlineKeyboardMarkup:
     tag = f"{sku}:{cand_idx}"
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("💾 Save Creative",   callback_data=f"ch_approve:{tag}"),
-            InlineKeyboardButton("❌ REJECT",           callback_data=f"ch_reject:{tag}"),
+            InlineKeyboardButton("💾 Save Creative",        callback_data=f"ch_approve:{tag}"),
+            InlineKeyboardButton("❌ REJECT",                callback_data=f"ch_reject:{tag}"),
         ],
         [
-            InlineKeyboardButton("🔍 New Keyword",     callback_data=f"ch_new_kw:{sku}"),
-            InlineKeyboardButton("✏️ Add Manually",    callback_data=f"ch_manual_add:{sku}"),
+            InlineKeyboardButton("📌 Save as New Product",  callback_data=f"ch_save_pending:{tag}"),
         ],
         [
-            InlineKeyboardButton("⏭ NEXT PRODUCT",    callback_data=f"ch_next:{tag}"),
-            InlineKeyboardButton("🛑 STOP SEARCHING", callback_data=f"ch_stop:{tag}"),
+            InlineKeyboardButton("🔍 New Keyword",          callback_data=f"ch_new_kw:{sku}"),
+            InlineKeyboardButton("✏️ Add Manually",         callback_data=f"ch_manual_add:{sku}"),
         ],
         [
-            InlineKeyboardButton("🚀 READY FOR ADS",  callback_data=f"ch_fin_ready:{tag}"),
+            InlineKeyboardButton("⏭ NEXT PRODUCT",         callback_data=f"ch_next:{tag}"),
+            InlineKeyboardButton("🛑 STOP SEARCHING",       callback_data=f"ch_stop:{tag}"),
+        ],
+        [
+            InlineKeyboardButton("🚀 READY FOR ADS",        callback_data=f"ch_fin_ready:{tag}"),
         ],
     ])
 
@@ -1275,6 +1279,56 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚠️ Could not save creative (slots may be full or SKU not found)."
             )
 
+        await _show_candidate(context.bot, session)
+        return
+
+    # ── SAVE AS NEW PENDING PRODUCT ───────────────────────────────────────
+    if action == "ch_save_pending":
+        ad = session.get("current_ad")
+        if not ad:
+            await query.message.reply_text("⚠️ No active creative to save.")
+            await _show_candidate(context.bot, session)
+            return
+
+        ad_library_url  = str(ad.get("ad_library_url", "")).strip()
+        landing_page_url = str(ad.get("landing_page_url", "")).strip()
+        keyword          = str(session["products"][session["product_idx"]].get("KEYWORD", "")).strip()
+
+        if not ad_library_url and not landing_page_url:
+            await query.message.reply_text("⚠️ No URL found for this creative — cannot save.")
+            await _show_candidate(context.bot, session)
+            return
+
+        try:
+            loop = asyncio.get_event_loop()
+            new_sku_num = await loop.run_in_executor(None, get_next_sku_number)
+            new_sku     = f"PRD-{new_sku_num:04d}"
+
+            row = {
+                "SKU":                  new_sku,
+                "KEYWORD":              keyword,
+                "URL PRODUCT":          landing_page_url,
+                "ADS LIBRARY MEDIA URL": ad_library_url,
+                "URL LANDING PAGE":     landing_page_url,
+                "STATU":                "PENDING",
+            }
+            await loop.run_in_executor(None, lambda: append_cluster_rows([row]))
+
+            await query.message.reply_text(
+                f"📌 <b>Saved as new pending product!</b>\n\n"
+                f"🔖 SKU: <code>{new_sku}</code>\n"
+                f"🔗 Product URL: {_esc(landing_page_url) if landing_page_url else '—'}\n"
+                f"📚 Ad: {_esc(ad_library_url) if ad_library_url else '—'}\n\n"
+                f"Find it in the <b>PENDING</b> tab of your sheet.",
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+            logger.info(f"[creative_hunt] Saved new pending product {new_sku} from ad {ad_library_url}")
+        except Exception as e:
+            logger.error(f"[creative_hunt] Failed to save pending product: {e}", exc_info=True)
+            await query.message.reply_text(f"❌ Failed to save: {e}")
+
+        # Creative hunt continues normally — show next candidate
         await _show_candidate(context.bot, session)
         return
 
