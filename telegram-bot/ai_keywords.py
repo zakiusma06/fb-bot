@@ -40,6 +40,7 @@ async def suggest_keywords(niche: str = "") -> list[str]:
                 f"generate exactly 4 search keywords to find similar winning ads in Meta Ads Library.\n\n"
                 f"PRODUCT INFO:\n{niche}\n\n"
                 f"Rules:\n"
+                f"- Write ALL keywords in FRENCH only\n"
                 f"- Each keyword must be a different search angle (benefit, use case, audience, problem solved)\n"
                 f"- Do NOT repeat the product title as a keyword\n"
                 f"- Keep each keyword 2-4 words, natural and searchable\n"
