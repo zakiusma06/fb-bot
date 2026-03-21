@@ -12,40 +12,61 @@ logger = logging.getLogger(__name__)
 
 async def suggest_keywords(niche: str = "") -> list[str]:
     """
-    Generate ~10 ecommerce/product-research keywords for Meta Ads Library.
-    Uses Replit AI Integrations (no personal API key needed).
+    Generate search keywords for Meta Ads Library.
+    When called with a product title + description (from _auto_generate_keywords),
+    generates 4 fresh search angles different from the original discovery keyword.
     Falls back to a curated list if AI is unavailable.
     """
     try:
         from openai import AsyncOpenAI
 
         base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL", "")
-        api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY", "")
+        api_key  = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
 
-        if not base_url or not api_key:
-            logger.warning("Replit AI integration not configured, using fallback keywords")
+        if not api_key:
+            logger.warning("OpenAI API key not configured, using fallback keywords")
             return _fallback_keywords(niche)
 
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        kwargs = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        client = AsyncOpenAI(**kwargs)
 
-        niche_hint = f" in the '{niche}' niche" if niche else " across popular ecommerce categories"
-        prompt = (
-            f"Generate exactly 10 product-research search keywords{niche_hint} "
-            "that are useful for finding winning products in Meta Ads Library. "
-            "Return ONLY a plain numbered list like:\n"
-            "1. keyword one\n2. keyword two\n...\n"
-            "No explanations, no extra text."
-        )
+        # Rich context (title + description) vs simple niche hint
+        has_description = "\n" in niche or len(niche) > 60
+        if has_description:
+            prompt = (
+                f"You are a Facebook Ads researcher. Based on the product below, "
+                f"generate exactly 4 search keywords to find similar winning ads in Meta Ads Library.\n\n"
+                f"PRODUCT INFO:\n{niche}\n\n"
+                f"Rules:\n"
+                f"- Each keyword must be a different search angle (benefit, use case, audience, problem solved)\n"
+                f"- Do NOT repeat the product title as a keyword\n"
+                f"- Keep each keyword 2-4 words, natural and searchable\n"
+                f"- Return ONLY a numbered list, no explanations:\n"
+                f"1. keyword\n2. keyword\n3. keyword\n4. keyword"
+            )
+            n = 4
+        else:
+            niche_hint = f" in the '{niche}' niche" if niche else " across popular ecommerce categories"
+            prompt = (
+                f"Generate exactly 10 product-research search keywords{niche_hint} "
+                "that are useful for finding winning products in Meta Ads Library. "
+                "Return ONLY a plain numbered list like:\n"
+                "1. keyword one\n2. keyword two\n...\n"
+                "No explanations, no extra text."
+            )
+            n = 10
 
         response = await client.chat.completions.create(
-            model="gpt-5-mini",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_completion_tokens=400,
+            max_tokens=200,
         )
         raw = response.choices[0].message.content or ""
         keywords = _parse_numbered_list(raw)
         if keywords:
-            return keywords
+            return keywords[:n]
         return _fallback_keywords(niche)
 
     except Exception as e:

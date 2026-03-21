@@ -276,48 +276,78 @@ async def _show_product_prompt(bot, session: dict):
 
 # ── Keyword building ──────────────────────────────────────────────────────
 
-async def _build_keywords(product: dict, custom_keyword: str | None) -> list[str]:
+async def _auto_generate_keywords(product: dict) -> list[str]:
     """
-    Keyword priority:
-      1. custom_keyword (typed by user for this specific product)
-      2. KEYWORD column from the sheet
-      3. PRODUCT NAME (first 3 words, then first 2)
-      4. AI-generated keywords (fallback)
+    Generate fresh keywords for Auto Search mode by:
+      1. Taking the product title from PRODUCT NAME column
+      2. Scraping the product page for a description
+      3. Passing title + description to AI to get 3-4 new search angles
+    Never uses the KEYWORD column — those are the keywords that found this
+    product originally, searching them again would just show the same ads.
     """
-    keywords: list[str] = []
-    seen: set[str] = set()
-
-    def _add(kw: str):
-        kw = kw.strip()
-        if kw and kw.lower() not in seen:
-            seen.add(kw.lower())
-            keywords.append(kw)
-
-    # If user typed a custom keyword, use ONLY that — no extras
-    if custom_keyword:
-        _add(custom_keyword)
-        return keywords
-
-    keyword_col = str(product.get("KEYWORD", "")).strip()
-    if keyword_col:
-        _add(keyword_col)
-
+    loop = asyncio.get_event_loop()
     product_name = str(product.get("PRODUCT NAME", "")).strip()
+    product_url  = (
+        str(product.get("URL PRODUCT", "")).strip()
+        or str(product.get("URL LANDING PAGE", "")).strip()
+    )
+
+    # Scrape product page for description
+    description = ""
+    if product_url:
+        try:
+            scraped = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: scrape_product_page(product_url)),
+                timeout=20,
+            )
+            description = scraped.get("description", "").strip()
+            # Use scraped title if we don't have a product name yet
+            if not product_name:
+                product_name = scraped.get("title", "").strip()
+        except Exception as _e:
+            logger.warning(f"[creative_hunt] auto-kw scrape failed: {_e}")
+
+    if not product_name and not description:
+        logger.warning("[creative_hunt] auto-kw: no title or description — falling back to KEYWORD column")
+        fallback = str(product.get("KEYWORD", "")).strip()
+        return [fallback] if fallback else []
+
+    # Build a rich context string for the AI
+    context = product_name
+    if description:
+        context += f"\n\nDescription: {description[:400]}"
+
+    try:
+        ai_kws = await suggest_keywords(context)
+        if ai_kws:
+            return ai_kws[:4]
+    except Exception as _e:
+        logger.warning(f"[creative_hunt] auto-kw AI failed: {_e}")
+
+    # Last resort: split product name into word groups
+    keywords = []
     if product_name:
         words = product_name.split()
-        _add(" ".join(words[:3]))
-        if len(words) > 3:
-            _add(" ".join(words[:2]))
-
-    if len(keywords) < 2:
-        try:
-            ai_kws = await suggest_keywords(product_name or keyword_col or "")
-            for kw in ai_kws[:2]:
-                _add(kw)
-        except Exception as e:
-            logger.warning(f"[creative_hunt] AI keyword fallback failed: {e}")
-
+        if len(words) >= 3:
+            keywords.append(" ".join(words[:3]))
+        if len(words) >= 2:
+            keywords.append(" ".join(words[:2]))
     return keywords[:4]
+
+
+async def _build_keywords(product: dict, custom_keyword: str | None) -> list[str]:
+    """
+    Keyword selection:
+      - custom_keyword typed by user → use ONLY that
+      - Auto Search (no custom_keyword) → generate fresh keywords from
+        product title + scraped description via AI (ignores KEYWORD column)
+    """
+    # If user typed a custom keyword, use ONLY that
+    if custom_keyword:
+        return [custom_keyword.strip()]
+
+    # Auto Search — generate fresh keywords, never reuse the sheet KEYWORD
+    return await _auto_generate_keywords(product)
 
 
 # ── Streaming search ──────────────────────────────────────────────────────
