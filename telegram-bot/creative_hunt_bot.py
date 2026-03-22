@@ -282,13 +282,10 @@ async def _show_product_prompt(bot, session: dict):
     )
 
     kb = _media_type_keyboard(product_idx, sku)
-    creative_rows = []
-    for i, url in enumerate(saved_creatives):
-        short = url[:40] + "…" if len(url) > 40 else url
-        creative_rows.append([
-            InlineKeyboardButton(f"📚 {i+1} — {short}", url=url),
-            InlineKeyboardButton("🗑", callback_data=f"ch_del_creative:{sku}:{i}"),
-        ])
+    creative_rows = [
+        [InlineKeyboardButton(f"\U0001f5d1 Remove #{i+1}", callback_data=f"ch_del_creative:{sku}:{i}")]
+        for i in range(len(saved_creatives))
+    ]
     if creative_rows:
         kb = InlineKeyboardMarkup(creative_rows + list(kb.inline_keyboard))
 
