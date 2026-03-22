@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-INTERVAL_HOURS = 4  # visit Facebook every 4 hours
+INTERVAL_HOURS = 1.5  # visit Facebook every 4 hours
 
 
 async def ping_facebook() -> bool:

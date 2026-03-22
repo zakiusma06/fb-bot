@@ -95,6 +95,9 @@ def _ensure_tab(ss: gspread.Spreadsheet, tab_name: str) -> gspread.Worksheet:
     try:
         ws = ss.worksheet(tab_name)
         existing = ws.row_values(1)
+        # Strip trailing empty strings — gspread returns extra empty cells
+        while existing and existing[-1] == "":
+            existing.pop()
         if existing != cols:
             all_values = ws.get_all_values()
             if len(all_values) > 1:

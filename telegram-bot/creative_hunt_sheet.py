@@ -383,3 +383,97 @@ def count_empty_slots(row: dict) -> int:
     """Return the number of empty creative slots (2-10) remaining for this row."""
     return sum(1 for col in EXTRA_CREATIVE_COLS
                if not _is_slot_filled(str(row.get(col, ""))))
+
+def delete_creative_slot(sku: str, slot_index: int, tab: str = "APPROVED") -> bool:
+    """Remove creative at slot_index (0-based), shifting remaining slots left."""
+    try:
+        client = _get_client()
+        ss     = client.open(GOOGLE_SHEET_NAME)
+        ws     = ss.worksheet(tab)
+        data   = ws.get_all_values()
+        if not data:
+            return False
+        header = data[0]
+        for row_num, row in enumerate(data[1:], start=2):
+            d = {header[i]: row[i] for i in range(min(len(header), len(row)))}
+            if d.get("SKU", "").strip() != sku:
+                continue
+            filled_cols = [col for col in CREATIVE_COLS if _is_slot_filled(d.get(col, ""))]
+            if slot_index >= len(filled_cols):
+                return False
+            del filled_cols[slot_index]
+            updates = []
+            for i, col in enumerate(CREATIVE_COLS):
+                if col not in header:
+                    continue
+                col_idx = header.index(col) + 1
+                cell    = gspread.utils.rowcol_to_a1(row_num, col_idx)
+                value   = d.get(filled_cols[i], "") if i < len(filled_cols) else ""
+                updates.append({"range": cell, "values": [[value]]})
+            if updates:
+                ws.batch_update(updates, value_input_option="RAW")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"[creative_sheet] delete_creative_slot failed: {e}")
+        return False
+
+
+def send_back_to_pending(sku: str, tab: str = "APPROVED") -> bool:
+    """
+    Move a product row from APPROVED back to PENDING:
+    - Clears creative URL slots 2-10 (keeps slot 1 = original research URL)
+    - Appends the cleaned row to PENDING tab
+    - Deletes the row from APPROVED tab
+    """
+    try:
+        client = _get_client()
+        ss          = client.open(GOOGLE_SHEET_NAME)
+        approved_ws = ss.worksheet(tab)
+        pending_ws  = ss.worksheet("PENDING")
+
+        data = approved_ws.get_all_values()
+        if not data:
+            return False
+        header = data[0]
+
+        for row_num, row in enumerate(data[1:], start=2):
+            d = {header[i]: row[i] for i in range(min(len(header), len(row)))}
+            if d.get("SKU", "").strip() != sku:
+                continue
+
+            # Clear creative slots 2-10 in the sheet row
+            clear_updates = []
+            for col in CREATIVE_COLS[1:]:
+                if col in header:
+                    col_idx = header.index(col) + 1
+                    cell    = gspread.utils.rowcol_to_a1(row_num, col_idx)
+                    clear_updates.append({"range": cell, "values": [[""]]})
+            if clear_updates:
+                approved_ws.batch_update(clear_updates, value_input_option="RAW")
+
+            # Re-read row after clearing
+            row_values = approved_ws.row_values(row_num)
+
+            # Get PENDING header and build matching row
+            pending_data   = pending_ws.get_all_values()
+            pending_header = pending_data[0] if pending_data else header
+            pending_row    = []
+            for col in pending_header:
+                if col in header:
+                    idx = header.index(col)
+                    pending_row.append(row_values[idx] if idx < len(row_values) else "")
+                else:
+                    pending_row.append("")
+
+            pending_ws.append_row(pending_row, value_input_option="RAW")
+            approved_ws.delete_rows(row_num)
+            logger.info(f"[creative_sheet] send_back_to_pending: SKU={sku} moved APPROVED→PENDING")
+            return True
+
+        logger.warning(f"[creative_sheet] send_back_to_pending: SKU={sku} not found in {tab}")
+        return False
+    except Exception as e:
+        logger.error(f"[creative_sheet] send_back_to_pending failed: {e}")
+        return False
+

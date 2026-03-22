@@ -149,17 +149,30 @@ def _clear(uid: int):
     _sessions.pop(uid, None)
 
 
+def _md(text: str) -> str:
+    """Escape special MarkdownV1 characters in user-supplied strings."""
+    return str(text).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+
+
 async def _reply(update: Update, text: str, keyboard=None, parse_mode=ParseMode.MARKDOWN):
     kwargs = {"parse_mode": parse_mode}
     if keyboard:
         kwargs["reply_markup"] = InlineKeyboardMarkup(keyboard)
+    async def _send(fn, *args, **kw):
+        try:
+            return await fn(*args, **kw)
+        except Exception as e:
+            if "parse entities" in str(e).lower() and parse_mode:
+                kw["parse_mode"] = None
+                return await fn(*args, **kw)
+            raise
     if update.callback_query:
         try:
-            await update.callback_query.message.edit_text(text, **kwargs)
+            await _send(update.callback_query.message.edit_text, text, **kwargs)
         except Exception:
-            await update.callback_query.message.reply_text(text, **kwargs)
+            await _send(update.callback_query.message.reply_text, text, **kwargs)
     else:
-        await update.message.reply_text(text, **kwargs)
+        await _send(update.message.reply_text, text, **kwargs)
 
 
 async def _answer(update: Update, text: str = ""):
@@ -228,6 +241,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     _save_monitor_chat_id(update.effective_chat.id)
     await _reply(update, _HELP_TEXT)
+
 
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -522,7 +536,7 @@ async def _show_product(update: Update, s: dict):
 
     creatives_text = ""
     if s["creative_urls"]:
-        lines = [f"  {i+1}. {html.escape(u)}" for i, u in enumerate(s["creative_urls"])]
+        lines = [f"  {i+1}. {html.escape(u[:60] + chr(8230) if len(u) > 60 else u)}" for i, u in enumerate(s["creative_urls"])]
         creatives_text = "\n<b>Creatives:</b>\n" + "\n".join(lines)
     else:
         creatives_text = "\n⚠️ No creatives found"
@@ -607,14 +621,15 @@ async def _show_creative_select(update: Update, s: dict):
         InlineKeyboardButton("🛑 Cancel",         callback_data="csel:cancel"),
     ])
     count = len(s["selected_urls"])
+    # URLs contain underscores that break Markdown — send without parse_mode
     text = (
-        f"🎬 *Select creatives to use*\n\n"
+        f"🎬 Select creatives to use\n\n"
         f"Tap to toggle. {count} selected.\n"
         f"1 creative → Normal ad\n"
         f"2+ creatives → Flexible/dynamic ad\n\n"
         + "\n".join(f"{i+1}. {u}" for i, u in enumerate(s["creative_urls"]))
     )
-    await _reply(update, text, rows)
+    await _reply(update, text, rows, parse_mode=None)
 
 
 async def _cb_creative_select(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -663,6 +678,8 @@ async def _handle_text_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid   = update.effective_user.id
     text  = update.message.text.strip()
     loop  = asyncio.get_running_loop()
+
+
 
     # ── Rules value input ─────────────────────────────────────────────────────
     rules_sess = _rules_sessions.get(uid)
@@ -828,8 +845,8 @@ async def _show_copy_review(update: Update, s: dict):
     sel_texts = s["selected_text"]   if isinstance(s["selected_text"],    list) else [s["selected_text"]]
     sel_heads = s["selected_headline"] if isinstance(s["selected_headline"], list) else [s["selected_headline"]]
 
-    text_lines = "\n".join(f"*Text {i+1}:* _{t}_" for i, t in enumerate(sel_texts))
-    head_lines = "\n".join(f"*Headline {i+1}:* `{h}`" for i, h in enumerate(sel_heads))
+    text_lines = "\n".join(f"*Text {i+1}:* {_md(t)}" for i, t in enumerate(sel_texts))
+    head_lines = "\n".join(f"*Headline {i+1}:* {_md(h)}" for i, h in enumerate(sel_heads))
 
     msg = (
         "📝 *AD COPY REVIEW*\n\n"
@@ -1103,7 +1120,7 @@ async def _show_final_summary(update: Update, s: dict):
     text = (
         "📋 *FINAL SUMMARY — Review before publishing*\n\n"
         f"*Campaign / Ad Set / Ad Name:*\n`{campaign_name}`\n\n"
-        f"*Product:* {p.get('PRODUCT NAME', '—')}\n"
+        f"*Product:* {_md(p.get('PRODUCT NAME', '—'))}\n"
         f"*SKU:* `{sku}`\n"
         f"*Landing Page:* {p.get('URL LANDING PAGE', '—')}\n\n"
         f"*Ad Type:* `{ad_type}` ({len(s['selected_urls'])} creative(s))\n"
@@ -1423,23 +1440,26 @@ async def _do_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE, s: dict):
 
 # ── Helpers shared by stats & monitor ─────────────────────────────────────────
 
-_PURCHASE_TYPES = frozenset({
+_PURCHASE_PRIORITY = [
     "offsite_conversion.fb_pixel_purchase",
     "onsite_web_purchase",
     "omni_purchase",
     "purchase",
-})
+]
 
 
 def _count_results(insights: dict) -> int:
-    total = 0
-    for action in insights.get("actions", []):
-        if action.get("action_type") in _PURCHASE_TYPES:
+    actions = insights.get("actions", [])
+    if not actions:
+        return 0
+    by_type = {a.get("action_type", ""): a for a in actions}
+    for ptype in _PURCHASE_PRIORITY:
+        if ptype in by_type:
             try:
-                total += int(float(action.get("value", "0")))
+                return int(float(by_type[ptype].get("value", "0")))
             except (ValueError, TypeError):
-                pass
-    return total
+                return 0
+    return 0
 
 
 # ── /stats ─────────────────────────────────────────────────────────────────────
@@ -1484,7 +1504,29 @@ async def _fetch_stats_card(uid: int, sku: str, loop) -> tuple[str, InlineKeyboa
     row = _stats_sessions.get(uid, {}).get("data", {}).get(sku, {})
     name        = row.get("CAMPAIGN NAME") or row.get("PRODUCT NAME", "?")
     campaign_id = row.get("META CAMPAIGN ID", "").strip()
-    logger.info(f"[stats] {sku} — campaign_id={repr(campaign_id)} statu={repr(row.get('STATU',''))} row_keys={list(row.keys())}")
+    logger.info(f"[stats] {sku} — campaign_id={repr(campaign_id)} statu={repr(row.get('STATU',''))}")
+
+    if not campaign_id:
+        try:
+            cfg = await loop.run_in_executor(None, sheet.load_settings)
+            ad_account_id = cfg.get("ad_account_id", "")
+            if ad_account_id:
+                found_id = await loop.run_in_executor(
+                    None, lambda: meta.find_campaign_by_name(ad_account_id, sku)
+                )
+                if not found_id and name and name != "?":
+                    found_id = await loop.run_in_executor(
+                        None, lambda n=name: meta.find_campaign_by_name(ad_account_id, n)
+                    )
+                if found_id:
+                    campaign_id = found_id
+                    logger.info(f"[stats] Auto-discovered campaign_id={campaign_id} for {sku}")
+                    await loop.run_in_executor(
+                        None, lambda cid=campaign_id: sheet.update_running_row(sku, {"META CAMPAIGN ID": cid})
+                    )
+                    _stats_sessions.get(uid, {}).get("data", {}).get(sku, {})["META CAMPAIGN ID"] = campaign_id
+        except Exception as e:
+            logger.warning(f"[stats] Auto-discover campaign_id failed for {sku}: {e}")
 
     spend   = row.get("SPEND",               "") or "—"
     results = row.get("RESULTS",             "") or "—"

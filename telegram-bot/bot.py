@@ -238,6 +238,7 @@ async def _post_init(application: Application) -> None:
             BotCommand("status",       "Check bot status"),
             BotCommand("scrollrounds", "Set manual scroll rounds (0 = auto)"),
             BotCommand("setup",        "Facebook cookie setup guide"),
+            BotCommand("setcookies",   "Update Facebook session cookies"),
             BotCommand("help",         "How to use this bot"),
             BotCommand("cancel",       "Cancel current operation"),
         ])
@@ -264,6 +265,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=MAIN_MENU,
     )
+
+async def cmd_setcookies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["awaiting_cookies"] = True
+    await update.message.reply_text("🍪 <b>Update Facebook Cookies</b>\n\nPaste your cookies JSON array (from Cookie-Editor) and send it.", parse_mode="HTML")
+
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -342,6 +348,35 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Catches persistent reply-keyboard button presses when NOT inside a
 # ConversationHandler state (the ConversationHandler takes priority while
 # a conversation is active).
+    if context.user_data.get("awaiting_cookies"):
+        import json as _json, pathlib as _pl
+        accumulated = context.user_data.get("pending_cookies_text", "") + text
+        context.user_data["pending_cookies_text"] = accumulated
+        try:
+            raw = _json.loads(accumulated)
+            if not isinstance(raw, list): raise ValueError("Expected a JSON array")
+            smap = {"no_restriction":"None","lax":"Lax","strict":"Strict"}
+            pw = []
+            for c in raw:
+                if c.get("domain","").lstrip(".") not in ("facebook.com","www.facebook.com"): continue
+                ss = smap.get((c.get("sameSite") or "no_restriction").lower(),"None")
+                ck = {"name":c["name"],"value":c["value"],"domain":c["domain"],"path":c.get("path","/"),"secure":c.get("secure",True),"httpOnly":c.get("httpOnly",False),"sameSite":ss}
+                if c.get("expirationDate"): ck["expires"]=int(c["expirationDate"])
+                pw.append(ck)
+            if not pw: raise ValueError("No facebook.com cookies found")
+            sp = _pl.Path(__file__).parent / "fb_auth_state.json"
+            sp.write_text(_json.dumps({"cookies":pw,"origins":[]},indent=2))
+            context.user_data.pop("awaiting_cookies")
+            context.user_data.pop("pending_cookies_text", None)
+            await update.message.reply_text(f"✅ {len(pw)} cookies saved. New session active.")
+        except _json.JSONDecodeError:
+            await update.message.reply_text("📨 Got part 1, send the rest…")
+        except Exception as e:
+            context.user_data.pop("awaiting_cookies")
+            context.user_data.pop("pending_cookies_text", None)
+            await update.message.reply_text(f"❌ Failed: {e}")
+        return
+
 
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
@@ -399,6 +434,39 @@ def build_application() -> Application:
     # ConversationHandler must be first so it takes priority during a session
     app.add_handler(build_conversation_handler())
 
+    # Cookie handler runs in group -1 (before ConversationHandler) so it always works
+    async def _cookie_intercept(update, context):
+        if not context.user_data.get("awaiting_cookies"):
+            return
+        import json as _json, pathlib as _pl
+        text = (update.message.text or "").strip()
+        accumulated = context.user_data.get("pending_cookies_text", "") + text
+        context.user_data["pending_cookies_text"] = accumulated
+        try:
+            raw = _json.loads(accumulated)
+            if not isinstance(raw, list): raise ValueError("Expected a JSON array")
+            smap = {"no_restriction":"None","lax":"Lax","strict":"Strict"}
+            pw = []
+            for c in raw:
+                if c.get("domain","").lstrip(".") not in ("facebook.com","www.facebook.com"): continue
+                ss = smap.get((c.get("sameSite") or "no_restriction").lower(),"None")
+                ck = {"name":c["name"],"value":c["value"],"domain":c["domain"],"path":c.get("path","/"),"secure":c.get("secure",True),"httpOnly":c.get("httpOnly",False),"sameSite":ss}
+                if c.get("expirationDate"): ck["expires"]=int(c["expirationDate"])
+                pw.append(ck)
+            if not pw: raise ValueError("No facebook.com cookies found")
+            sp = _pl.Path(__file__).parent / "fb_auth_state.json"
+            sp.write_text(_json.dumps({"cookies":pw,"origins":[]},indent=2))
+            context.user_data.pop("awaiting_cookies")
+            context.user_data.pop("pending_cookies_text", None)
+            await update.message.reply_text(f"✅ {len(pw)} cookies saved. New session active.")
+        except _json.JSONDecodeError:
+            await update.message.reply_text("📨 Got part 1, send the rest…")
+        except Exception as e:
+            context.user_data.pop("awaiting_cookies", None)
+            context.user_data.pop("pending_cookies_text", None)
+            await update.message.reply_text(f"❌ Failed: {e}")
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _cookie_intercept), group=-1)
+
     # Simple commands
     app.add_handler(CommandHandler("start",        cmd_start))
     app.add_handler(CommandHandler("help",         cmd_help))
@@ -406,6 +474,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("status",       cmd_status))
     app.add_handler(CommandHandler("scrollrounds", cmd_scrollrounds))
     app.add_handler(CommandHandler("cancel",       cmd_cancel))
+    app.add_handler(CommandHandler("setcookies",    cmd_setcookies))
 
     # Menu button presses (only fires when NOT in an active conversation)
     app.add_handler(

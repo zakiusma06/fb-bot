@@ -781,3 +781,22 @@ def get_campaign_insights(campaign_id: str) -> dict:
     except Exception as e:
         logger.error(f"[meta] get_campaign_insights failed: {e}")
         return {}
+    except Exception as e:
+        logger.error(f"[meta] find_campaign_by_name failed: {e}")
+        return None
+
+def find_campaign_by_name(ad_account_id: str, search_name: str):
+    """Search ad account for a campaign whose name contains search_name."""
+    try:
+        result = _get(f"{ad_account_id}/campaigns", {"fields": "id,name", "limit": 500})
+        campaigns = result.get("data", [])
+        search_lower = search_name.lower()
+        for camp in campaigns:
+            cname = camp.get("name", "")
+            if search_lower in cname.lower():
+                logger.info(f"[meta] find_campaign_by_name: found {cname} -> {camp['id']}")
+                return camp["id"]
+        return None
+    except Exception as e:
+        logger.error(f"[meta] find_campaign_by_name failed: {e}")
+        return None
