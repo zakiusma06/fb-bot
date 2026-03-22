@@ -65,24 +65,31 @@ def evaluate_campaign(row: dict, insights: dict, rules: dict) -> tuple[str | Non
     results = extract_results(insights)
     cpr     = spend / results if results > 0 else float("inf")
 
-    start_time = row.get("EFFECTIVE START TIME", "") or row.get("PUBLISHED AT", "")
-    hours = hours_since(start_time)
-
     global_limit   = float(rules.get("GLOBAL_NO_RESULT_SPEND", 3.0))
     day1_cpr_limit = float(rules.get("DAY1_CPR_LIMIT", 2.0))
     day2_winner    = float(rules.get("DAY2_WINNER_CPR", 2.0))
 
+    # Global rule — no timestamp required
     if spend >= global_limit and results == 0:
-        return "LOSER", f"Auto: spend ${spend:.2f} ≥ ${global_limit:.2f} with 0 results"
+        return "LOSER", f"Auto: spend >= ${global_limit:.2f} and 0 results"
 
-    if hours >= 24 and results > 0 and cpr > day1_cpr_limit:
-        return "LOSER", f"Auto: Day 1 — CPR ${cpr:.2f} > ${day1_cpr_limit:.2f}"
+    # Time-based rules require a valid start timestamp
+    start_time = (row.get("EFFECTIVE START TIME", "") or row.get("PUBLISHED AT", "")).strip()
+    if not start_time:
+        return None, "SKIP_NO_TIMESTAMP"
 
-    if hours >= 48 and results > 0:
+    hours = hours_since(start_time)
+
+    # Day 1 window: >= 24h and < 48h
+    if hours >= 24 and hours < 48 and cpr >= day1_cpr_limit:
+        return "LOSER", f"Auto: Day 1 CPR >= ${day1_cpr_limit:.2f}"
+
+    # Day 2 window: >= 48h
+    if hours >= 48:
         if cpr < day2_winner:
-            return "WINNER", f"Auto: Day 2 — CPR ${cpr:.2f} < ${day2_winner:.2f}"
+            return "WINNER", f"Auto: Day 2 CPR < ${day2_winner:.2f}"
         else:
-            return "LOSER", f"Auto: Day 2 — CPR ${cpr:.2f} ≥ ${day2_winner:.2f}"
+            return "LOSER", f"Auto: Day 2 CPR >= ${day2_winner:.2f}"
 
     return None, ""
 
@@ -131,6 +138,23 @@ async def _evaluate_all(sheet, meta, ads_rules_mod, bot, chat_id):
         sku         = row.get("SKU", "?")
         campaign_id = row.get("META CAMPAIGN ID", "").strip()
         if not campaign_id:
+            try:
+                from ads_config import load_config
+                cfg           = load_config()
+                ad_account_id = cfg.get("ad_account_id", "")
+                if ad_account_id:
+                    campaign_id = await loop.run_in_executor(
+                        None, lambda: meta.find_campaign_by_name(ad_account_id, sku)
+                    ) or ""
+                    if campaign_id:
+                        logger.info(f"[monitor] {sku}: recovered campaign_id={campaign_id}")
+                        await loop.run_in_executor(
+                            None, lambda: sheet.update_running_row(sku, {"META CAMPAIGN ID": campaign_id})
+                        )
+            except Exception as e:
+                logger.warning(f"[monitor] {sku}: campaign_id recovery failed: {e}")
+        if not campaign_id:
+            logger.warning(f"[monitor] {sku}: no campaign_id found — skipping")
             continue
 
         # KEEP RUNNING override: skip until OVERRIDE_UNTIL timestamp, then clear
@@ -189,6 +213,15 @@ async def _evaluate_all(sheet, meta, ads_rules_mod, bot, chat_id):
             logger.warning(f"[monitor] Metrics update failed for {sku}: {e}")
 
         action, reason = evaluate_campaign(row, insights, rules)
+        if reason == "SKIP_NO_TIMESTAMP":
+            logger.warning(f"[monitor] {sku}: EFFECTIVE START TIME missing — Day 1/2 rules skipped, Global rule already checked")
+            if bot and chat_id:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=f"⚠️ `{sku}`: launch timestamp missing — time-based rules skipped.",
+                    parse_mode="Markdown",
+                )
+            continue
         if not action:
             logger.info(f"[monitor] {sku}: no action needed")
             continue
@@ -199,11 +232,22 @@ async def _evaluate_all(sheet, meta, ads_rules_mod, bot, chat_id):
         try:
             await loop.run_in_executor(None, lambda cid=campaign_id: meta.force_stop_campaign(cid))
         except Exception as e:
-            logger.error(f"[monitor] Force stop failed for {campaign_id}: {e}")
+            logger.error(f"[monitor] Force stop failed for {sku} ({campaign_id}): {e}")
+            if bot and chat_id:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        f"🚨 `{sku}`: auto-stop FAILED — campaign may still be running.\n"
+                        f"Action: `{action}`\nError: `{e}`"
+                    ),
+                    parse_mode="Markdown",
+                )
+            continue
 
         extra = {
             "STATU":          action,
             "RULE TRIGGERED": reason,
+            "NOTE":           reason,
             "STOPPED AT":     datetime.now(timezone.utc).isoformat(),
             "STOP REASON":    reason,
         }
