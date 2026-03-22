@@ -1869,8 +1869,29 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         target_tab = sheet.TAB_WINNER if action == "winner" else sheet.TAB_LOSER
         emoji      = "🏆" if action == "winner" else "❌"
 
+        # Fallback: fetch campaign_id from sheet if missing from session
+        if not campaign_id:
+            try:
+                sheet_rows = await loop.run_in_executor(None, sheet.load_running_rows)
+                sheet_row  = next((r for r in sheet_rows if r.get("SKU", "").strip() == sku), {})
+                campaign_id = sheet_row.get("META CAMPAIGN ID", "").strip()
+                if campaign_id:
+                    logger.info(f"[stats] {action} {sku} — recovered campaign_id from sheet: {campaign_id}")
+            except Exception as e:
+                logger.warning(f"[stats] {action} {sku} — sheet fallback failed: {e}")
+
         if campaign_id:
-            await loop.run_in_executor(None, lambda: meta.force_stop_campaign(campaign_id))
+            logger.info(f"[stats] {action} {sku} — stopping campaign {campaign_id}")
+            ok_stop = await loop.run_in_executor(None, lambda: meta.force_stop_campaign(campaign_id))
+            logger.info(f"[stats] {action} {sku} — force_stop_campaign result: {ok_stop}")
+        else:
+            logger.warning(f"[stats] {action} {sku} — campaign_id missing after sheet fallback, cannot stop")
+            await msg.edit_text(
+                f"⚠️ Campaign ID not found for `{sku}` — cannot stop campaign in Meta.\n\n"
+                "Please stop it manually in Ads Manager before classifying.",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
 
         extra = {
             "STATU":           status,
