@@ -1693,6 +1693,13 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
         return
 
+    # ── REFRESH STATS ─────────────────────────────────────────────────────────
+    elif action == "refresh":
+        await msg.edit_text(f"🔄 Refreshing stats for *{sku}*…", parse_mode=ParseMode.MARKDOWN)
+        text, kb = await _fetch_stats_card(uid, sku, loop)
+        await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
+        return
+
     # ── REPUBLISH CAMPAIGN ─────────────────────────────────────────────────────
     elif action == "republish":
         await msg.edit_text(f"🔄 *Republishing `{sku}`…*\nStopping old campaign…", parse_mode=ParseMode.MARKDOWN)
