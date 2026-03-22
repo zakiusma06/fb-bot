@@ -1508,7 +1508,7 @@ async def _fetch_stats_card(uid: int, sku: str, loop) -> tuple[str, InlineKeyboa
 
     if not campaign_id:
         try:
-            cfg = await loop.run_in_executor(None, sheet.load_settings)
+            cfg = load_config()
             ad_account_id = cfg.get("ad_account_id", "")
             if ad_account_id:
                 found_id = await loop.run_in_executor(
