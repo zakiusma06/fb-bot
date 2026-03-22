@@ -268,8 +268,8 @@ async def _show_product_prompt(bot, session: dict):
     for i, url in enumerate(saved_creatives):
         # Only show short label — full URL is in the button to avoid message too long
         label = url if url.startswith("https://www.facebook.com") else "CDN media"
-        short = label[:60] + "…" if len(label) > 60 else label
-        creatives_lines += f"📚 <b>{i+1}/{total_saved}</b> {_esc(short)}\n"
+        safe_url = url.replace("&", "&amp;").replace('"', "&quot;")
+        creatives_lines += f'📚 <b>{i+1}/{total_saved}</b> <a href="{safe_url}">🔗 View Creative</a>\n'
 
     text = (
         f"<b>Product {product_idx + 1} / {total}</b>\n\n"
