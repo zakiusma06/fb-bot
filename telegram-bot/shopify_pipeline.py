@@ -12,6 +12,7 @@ import asyncio
 import logging
 import sys
 import os
+from urllib.parse import urlparse, unquote
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -64,6 +65,22 @@ async def run_pipeline(
     image_count = len(scraped.get("image_urls", []))
     logger.info(f"[pipeline] {image_count} image(s) found for {url_product}")
 
+    # ── Log & fallback scraped content ────────────────────────────────────
+    raw_title       = scraped.get("title", "").strip()
+    raw_description = scraped.get("description", "").strip()
+    logger.info(f"[pipeline] scraped title={raw_title!r}, desc_len={len(raw_description)}")
+
+    if not raw_title:
+        path_parts = urlparse(url_product).path
+        segments   = [s for s in path_parts.split("/") if s]
+        slug       = unquote(segments[-1]) if segments else ""
+        raw_title  = slug.replace("-", " ").replace("_", " ").strip() or url_product
+        logger.warning(f"[pipeline] empty scraped title — URL slug fallback: {raw_title!r}")
+
+    if not raw_description:
+        raw_description = f"Product: {raw_title}. URL: {url_product}"
+        logger.warning(f"[pipeline] empty scraped description — URL-based fallback used")
+
     # Never block on missing images — user can add them manually after creation
 
     # ── Step 2: AI content ─────────────────────────────────────────────────
@@ -72,8 +89,8 @@ async def run_pipeline(
         loop.run_in_executor(
             None,
             lambda: generate_product_content(
-                raw_title=scraped["title"],
-                raw_description=scraped["description"],
+                raw_title=raw_title,
+                raw_description=raw_description,
                 language=language,
             )
         ),

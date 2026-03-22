@@ -718,11 +718,16 @@ async def cmd_creativehunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    await update.message.reply_text("⏳ Loading APPROVED products…")
-    products = load_approved_products()
+    loading_msg = await update.message.reply_text("⏳ Loading APPROVED products…")
+    try:
+        products = await asyncio.get_running_loop().run_in_executor(None, load_approved_products)
+    except Exception as e:
+        logger.error(f"[creativehunt] load_approved_products failed: {e}")
+        await loading_msg.edit_text("❌ Failed to load products. Please try again.")
+        return
 
     if not products:
-        await update.message.reply_text(
+        await loading_msg.edit_text(
             "📭 <b>No products found</b> in APPROVED.\n\n"
             "Approve products in the Approval Bot first — they will appear here.",
             parse_mode="HTML",
