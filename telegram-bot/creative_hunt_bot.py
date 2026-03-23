@@ -296,6 +296,20 @@ async def _show_product_prompt(bot, session: dict):
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
+        # Send creative URLs as plain text so Telegram auto-links them.
+        if saved_creatives:
+            entries = [f"{i+1}. {url}" for i, url in enumerate(saved_creatives)]
+            header = "Saved creatives - tap to open:\n\n"
+            chunk, chunk_len = [], 0
+            for entry in entries:
+                ln = entry + "\n"
+                if chunk_len + len(ln) > 4000:
+                    await bot.send_message(chat_id=chat_id, text=header+''.join(chunk), disable_web_page_preview=True)
+                    chunk, chunk_len = [], 0
+                chunk.append(ln)
+                chunk_len += len(ln)
+            if chunk:
+                await bot.send_message(chat_id=chat_id, text=header+''.join(chunk), disable_web_page_preview=True)
 
 
 # ── Keyword building ──────────────────────────────────────────────────────
