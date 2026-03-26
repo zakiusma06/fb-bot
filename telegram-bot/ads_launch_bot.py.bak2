@@ -28,9 +28,8 @@ BOT_COMMANDS = [
     BotCommand("setup_meta", "⚙️ Configure Meta account settings"),
     BotCommand("stats",      "📊 View running campaigns + manual control"),
     BotCommand("rules",      "⚖️ View and edit campaign judgment rules"),
-    BotCommand("cancel",      "❌ Cancel current session"),
-    BotCommand("accesstoken", "🔑 Update Meta API access token"),
-    BotCommand("help",        "📋 Show all commands"),
+    BotCommand("cancel",     "❌ Cancel current session"),
+    BotCommand("help",       "📋 Show all commands"),
     BotCommand("start",      "👋 Start the bot"),
 ]
 
@@ -242,19 +241,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     _save_monitor_chat_id(update.effective_chat.id)
     await _reply(update, _HELP_TEXT)
-
-
-
-async def cmd_accesstoken(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not await _auth(update):
-        return
-    ctx.user_data["awaiting_token"] = True
-    await _reply(update,
-        "🔑 <b>Update Meta Access Token</b>\n\n"
-        "Paste your new Meta API access token and send it.\n\n"
-        "It will be validated against the Meta API before saving.",
-        parse_mode=ParseMode.HTML,
-    )
 
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -532,7 +518,7 @@ async def _show_product(update: Update, s: dict):
 
     creative_urls = [
         p.get(f"ADS LIBRARY MEDIA URL{'' if i == 1 else f' {i}'}", "").strip()
-        for i in range(1, 11)
+        for i in range(1, 6)
     ]
     s["creative_urls"] = [u for u in creative_urls if u]
 
@@ -547,11 +533,13 @@ async def _show_product(update: Update, s: dict):
     keyword    = _e(p.get("KEYWORD", "—"))
     note       = _e(p.get("NOTE", ""))
 
-    # Show count only in card; URLs sent as plain follow-up (avoids Entities_too_long).
-    creatives_text = (
-        f"\n📚 <b>{len(s['creative_urls'])}</b> creative(s) — links below\n"
-        if s["creative_urls"] else "\n⚠️ No creatives found"
-    )
+    creatives_text = ""
+    if s["creative_urls"]:
+        lines = [f"  {i+1}. {html.escape(u[:60] + chr(8230) if len(u) > 60 else u)}" for i, u in enumerate(s["creative_urls"])]
+        creatives_text = "\n<b>Creatives:</b>\n" + "\n".join(lines)
+    else:
+        creatives_text = "\n⚠️ No creatives found"
+
     text = (
         f"📦 Product <b>{idx + 1} of {len(products)}</b>\n\n"
         f"<b>SKU:</b> <code>{sku}</code>\n"
@@ -568,27 +556,6 @@ async def _show_product(update: Update, s: dict):
         [("🔄 Preview Again", "launch:preview"), ("🛑 Stop", "launch:stop")],
     )
     await _reply(update, text, kb, parse_mode=ParseMode.HTML)
-
-    # Send creative URLs as plain text — Telegram auto-links them, no entity limits.
-    if s["creative_urls"]:
-        bot = update.get_bot()
-        chat_id = (update.callback_query or update).message.chat_id
-        entries = [f"{i+1}. {u}" for i, u in enumerate(s["creative_urls"])]
-        header = "Creatives — tap to open:\n\n"
-        chunk, chunk_len = [], 0
-        for entry in entries:
-            line = entry + "\n"
-            if chunk_len + len(line) > 4000:
-                await bot.send_message(chat_id=chat_id,
-                                       text=header + "".join(chunk),
-                                       disable_web_page_preview=True)
-                chunk, chunk_len = [], 0
-            chunk.append(line)
-            chunk_len += len(line)
-        if chunk:
-            await bot.send_message(chat_id=chat_id,
-                                   text=header + "".join(chunk),
-                                   disable_web_page_preview=True)
 
 
 async def _cb_launch(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -653,36 +620,15 @@ async def _show_creative_select(update: Update, s: dict):
         InlineKeyboardButton("🛑 Cancel",         callback_data="csel:cancel"),
     ])
     count = len(s["selected_urls"])
-    total = len(s["creative_urls"])
-    # URLs omitted from card — sent as plain follow-up to avoid message-too-long errors.
+    # URLs contain underscores that break Markdown — send without parse_mode
     text = (
         f"🎬 Select creatives to use\n\n"
         f"Tap to toggle. {count} selected.\n"
         f"1 creative → Normal ad\n"
         f"2+ creatives → Flexible/dynamic ad\n\n"
-        f"{total} creative(s) — full links below ↓"
+        + "\n".join(f"{i+1}. {u}" for i, u in enumerate(s["creative_urls"]))
     )
     await _reply(update, text, rows, parse_mode=None)
-
-    # Send full URLs as plain text — Telegram auto-links them, no entity limits.
-    bot = update.get_bot()
-    chat_id = (update.callback_query or update).message.chat_id
-    entries = [f"{i+1}. {u}" for i, u in enumerate(s["creative_urls"])]
-    header = "Creatives — tap to open:\n\n"
-    chunk, chunk_len = [], 0
-    for entry in entries:
-        line = entry + "\n"
-        if chunk_len + len(line) > 4000:
-            await bot.send_message(chat_id=chat_id,
-                                   text=header + "".join(chunk),
-                                   disable_web_page_preview=True)
-            chunk, chunk_len = [], 0
-        chunk.append(line)
-        chunk_len += len(line)
-    if chunk:
-        await bot.send_message(chat_id=chat_id,
-                               text=header + "".join(chunk),
-                               disable_web_page_preview=True)
 
 
 async def _cb_creative_select(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -731,27 +677,6 @@ async def _handle_text_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid   = update.effective_user.id
     text  = update.message.text.strip()
     loop  = asyncio.get_running_loop()
-
-
-
-    # ── Access token paste ───────────────────────────────────────────────────
-    if ctx.user_data.get("awaiting_token"):
-        ctx.user_data.pop("awaiting_token")
-        await _reply(update, "⏳ Validating token…", parse_mode=ParseMode.HTML)
-        ok, msg = await loop.run_in_executor(None, lambda: meta.validate_token(text))
-        if not ok:
-            await _reply(update,
-                f"❌ <b>Token rejected</b> — not saved.\n\n<code>{html.escape(msg)}</code>",
-                parse_mode=ParseMode.HTML,
-            )
-        else:
-            update_config(meta_access_token=text)
-            await _reply(update,
-                f"✅ <b>Access token saved.</b>\n\n{html.escape(msg)}\n\n"
-                "All future API calls will use the new token.",
-                parse_mode=ParseMode.HTML,
-            )
-        return
 
     # ── Rules value input ─────────────────────────────────────────────────────
     rules_sess = _rules_sessions.get(uid)
@@ -1195,7 +1120,8 @@ async def _show_final_summary(update: Update, s: dict):
         f"*Product:* {_md(p.get('PRODUCT NAME', '—'))}\n"
         f"*SKU:* `{sku}`\n"
         f"*Landing Page:* {p.get('URL LANDING PAGE', '—')}\n\n"
-        f"*Ad Type:* `{ad_type}` ({len(s['selected_urls'])} creative(s) selected)\n\n"
+        f"*Ad Type:* `{ad_type}` ({len(s['selected_urls'])} creative(s))\n"
+        f"*Selected Creatives:*\n" + "\n".join(f"  • {u}" for u in s["selected_urls"]) + "\n\n"
         f"*Primary Texts ({len(s['selected_text'])}):*\n"
         + "\n".join(f"  _{t}_" for t in s["selected_text"]) + "\n\n"
         + f"*Headlines ({len(s['selected_headline'])}):*\n"
@@ -1579,7 +1505,7 @@ async def _fetch_stats_card(uid: int, sku: str, loop) -> tuple[str, InlineKeyboa
 
     if not campaign_id:
         try:
-            cfg = load_config()
+            cfg = await loop.run_in_executor(None, sheet.load_settings)
             ad_account_id = cfg.get("ad_account_id", "")
             if ad_account_id:
                 found_id = await loop.run_in_executor(
@@ -1764,13 +1690,6 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
         return
 
-    # ── REFRESH STATS ─────────────────────────────────────────────────────────
-    elif action == "refresh":
-        await msg.edit_text(f"🔄 Refreshing stats for *{sku}*…", parse_mode=ParseMode.MARKDOWN)
-        text, kb = await _fetch_stats_card(uid, sku, loop)
-        await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
-        return
-
     # ── REPUBLISH CAMPAIGN ─────────────────────────────────────────────────────
     elif action == "republish":
         await msg.edit_text(f"🔄 *Republishing `{sku}`…*\nStopping old campaign…", parse_mode=ParseMode.MARKDOWN)
@@ -1940,29 +1859,8 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         target_tab = sheet.TAB_WINNER if action == "winner" else sheet.TAB_LOSER
         emoji      = "🏆" if action == "winner" else "❌"
 
-        # Fallback: fetch campaign_id from sheet if missing from session
-        if not campaign_id:
-            try:
-                sheet_rows = await loop.run_in_executor(None, sheet.load_running_rows)
-                sheet_row  = next((r for r in sheet_rows if r.get("SKU", "").strip() == sku), {})
-                campaign_id = sheet_row.get("META CAMPAIGN ID", "").strip()
-                if campaign_id:
-                    logger.info(f"[stats] {action} {sku} — recovered campaign_id from sheet: {campaign_id}")
-            except Exception as e:
-                logger.warning(f"[stats] {action} {sku} — sheet fallback failed: {e}")
-
         if campaign_id:
-            logger.info(f"[stats] {action} {sku} — stopping campaign {campaign_id}")
-            ok_stop = await loop.run_in_executor(None, lambda: meta.force_stop_campaign(campaign_id))
-            logger.info(f"[stats] {action} {sku} — force_stop_campaign result: {ok_stop}")
-        else:
-            logger.warning(f"[stats] {action} {sku} — campaign_id missing after sheet fallback, cannot stop")
-            await msg.edit_text(
-                f"⚠️ Campaign ID not found for `{sku}` — cannot stop campaign in Meta.\n\n"
-                "Please stop it manually in Ads Manager before classifying.",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            return
+            await loop.run_in_executor(None, lambda: meta.force_stop_campaign(campaign_id))
 
         extra = {
             "STATU":           status,
@@ -1970,17 +1868,6 @@ async def _cb_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "STOPPED AT":      datetime.now(timezone.utc).isoformat(),
             "STOP REASON":     f"Manual: {status}",
         }
-        # Persist latest metrics from the stats session into the destination row.
-        _srow = _stats_sessions.get(uid, {}).get("data", {}).get(sku, {})
-        for _field, _key in (
-            ("SPEND",               "SPEND"),
-            ("RESULTS",             "RESULTS"),
-            ("TOTAL COST PER RZLT", "TOTAL COST PER RZLT"),
-        ):
-            _val = str(_srow.get(_key, "") or "")
-            if _val and _val not in ("—", "N/A") and not _val.startswith("⚠️"):
-                extra[_field] = _val
-
         ok = await loop.run_in_executor(
             None, lambda: sheet.move_running_product(sku, target_tab, extra)
         )
@@ -2143,8 +2030,7 @@ def build_app(token: str) -> Application:
     )
 
     app.add_handler(CommandHandler("start",      cmd_start))
-    app.add_handler(CommandHandler("help",        cmd_help))
-    app.add_handler(CommandHandler("accesstoken", cmd_accesstoken))
+    app.add_handler(CommandHandler("help",       cmd_help))
     app.add_handler(CommandHandler("cancel",     cmd_cancel))
     app.add_handler(CommandHandler("launch",     cmd_launch))
     app.add_handler(CommandHandler("stats",      cmd_stats))

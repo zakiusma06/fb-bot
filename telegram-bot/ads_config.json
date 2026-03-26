@@ -1,15 +1,16 @@
 {
-  "ad_account_id": "act_2660723874297049",
-  "ad_account_name": "Rivapalacios Carrick",
+  "ad_account_id": "act_872599422407358",
+  "ad_account_name": "GUINEA TEST",
   "page_id": "106380772094387",
   "page_name": "Cadox",
-  "pixel_id": "905295478789166",
-  "pixel_name": "Perosnal",
+  "pixel_id": "1693592728687178",
+  "pixel_name": "newhibaaa",
   "conversion_event": "Purchase",
   "country": "GN",
-  "daily_budget_usd": 10.0,
+  "daily_budget": 15.0,
   "objective": "OUTCOME_SALES",
-  "cta": "LEARN_MORE",
-  "timezone": "Africa/Abidjan",
-  "currency": "USD"
+  "cta": "SHOP_NOW",
+  "timezone": "Africa/Accra",
+  "currency": "USD",
+  "meta_access_token": "EAANXQKCxPjsBRKZCjdMwOMr1NDsXyjUMUNYTP6Flu94tuEopwqM2YlxoYMPOk4r7aywXtuKdESoCstmsyKMUWAEp0SpRRmE6dW6Uy6nsrHxb9vKlKmwiJVlSHQcnAncT01mxmZCUJNQ1phwZCW6Ku7oGlBnMmV2kmM294Pv0Uv2nevQlZB0XZAsovBZBX7VBA1SvCbGnjiRtzaKAZDZD"
 }

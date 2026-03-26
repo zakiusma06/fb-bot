@@ -65,11 +65,35 @@ EXTRA_MEDIA_COLS = [
 RUNNING_COLS = BASE_COLS + OPS_COLS + EXTRA_MEDIA_COLS
 RESULT_COLS  = BASE_COLS + OPS_COLS + EXTRA_MEDIA_COLS
 
+WINNER_LOSER_COLS = [
+    "PUBLISHED AT",
+    "KEYWORD", "SKU", "PRODUCT NAME", "STATU", "URL PRODUCT",
+    "PRICE", "SOURCING PRICE USD", "WEIGHT GRAM", "SOURCING URL",
+    "NOTE", "MANUAL NOTE",
+    "RESULTS", "SPEND",
+    "1 DAY COST PER RZLT", "2 DAY COST PER RZLT", "TOTAL COST PER RZLT",
+    "ADS LIBRARY MEDIA URL", "ADS LIBRARY MEDIA URL 2", "ADS LIBRARY MEDIA URL 3",
+    "ADS LIBRARY MEDIA URL 4", "ADS LIBRARY MEDIA URL 5",
+    "URL LANDING PAGE", "HAS VARIANTS",
+    "CAMPAIGN NAME", "ADSET NAME", "AD NAME",
+    "META CAMPAIGN ID", "META ADSET ID", "META AD ID",
+    "AD TYPE", "SELECTED CREATIVES", "SELECTED PRIMARY TEXT", "SELECTED HEADLINE",
+    "PUBLISH MODE", "SCHEDULED TIME", "EFFECTIVE START TIME",
+    "LAST METRICS SYNC",
+    "RULE TRIGGERED", "ERROR MESSAGE",
+    "MANUAL DECISION", "OVERRIDE ACTIVE", "OVERRIDE UNTIL",
+    "STOPPED AT", "STOP REASON",
+    "ADS LIBRARY MEDIA URL 6", "ADS LIBRARY MEDIA URL 7", "ADS LIBRARY MEDIA URL 8",
+    "ADS LIBRARY MEDIA URL 9", "ADS LIBRARY MEDIA URL 10",
+    "IMAGE URL", "UPLOADED ASSET IDS",
+    "COMPARE AT PRICE",
+]
+
 TAB_COLUMNS = {
     TAB_READY:   READY_COLS,
     TAB_RUNNING: RUNNING_COLS,
-    TAB_WINNER:  RESULT_COLS,
-    TAB_LOSER:   RESULT_COLS,
+    TAB_WINNER:  WINNER_LOSER_COLS,
+    TAB_LOSER:   WINNER_LOSER_COLS,
     TAB_ERROR:   RESULT_COLS,
 }
 
@@ -131,6 +155,19 @@ def _ensure_tab(ss: gspread.Spreadsheet, tab_name: str) -> gspread.Worksheet:
 
 def _row_to_dict(header: list, row: list) -> dict:
     return {col: (row[i] if i < len(row) else "") for i, col in enumerate(header)}
+
+
+def migrate_winner_loser_tabs() -> None:
+    """
+    One-time migration: reorder WINNER and LOSER sheets to WINNER_LOSER_COLS.
+    Existing rows are remapped by column name — no data is lost.
+    Safe to call repeatedly; a no-op if headers already match.
+    """
+    client = _get_client()
+    ss     = _open_sheet(client)
+    for tab in (TAB_WINNER, TAB_LOSER):
+        _ensure_tab(ss, tab)
+        logger.info(f"[ads_sheet] migrate_winner_loser_tabs: '{tab}' done")
 
 
 def migrate_ready_for_ads() -> None:

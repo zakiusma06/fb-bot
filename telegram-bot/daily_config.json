@@ -1,18 +1,18 @@
 {
-  "date": "2026-03-18",
+  "date": "2026-03-22",
   "keywords": [
     {
-      "term": "Adele-hues%5",
-      "ads_target": 100
+      "term": "promo exclusive",
+      "ads_target": 7
     },
     {
-      "term": "Fashion-dujour",
-      "ads_target": 100
+      "term": "offre limitée",
+      "ads_target": 7
     },
     {
-      "term": "BoutiqueFortune NOR",
-      "ads_target": 100
+      "term": "nouveauté tendance",
+      "ads_target": 6
     }
   ],
-  "total_ads_target": 300
+  "total_ads_target": 20
 }

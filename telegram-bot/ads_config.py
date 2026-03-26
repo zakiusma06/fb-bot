@@ -25,6 +25,8 @@ _DEFAULT_CONFIG = {
     "cta":              "SHOP_NOW",
     "timezone":         "Africa/Conakry",
     "currency":         "GNF",
+    "meta_access_token": "",
+    "meta_access_token": "",
 }
 
 OBJECTIVES = {

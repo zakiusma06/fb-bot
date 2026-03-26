@@ -1,20 +1,20 @@
 {
   "status": "completed",
-  "triggered_at": "2026-03-18T01:40:00.010962",
-  "completed_at": "2026-03-18T02:00:38.965763",
-  "elapsed_seconds": 1236,
+  "triggered_at": "2026-03-26T00:00:00.004396",
+  "completed_at": "2026-03-26T00:45:32.748430",
+  "elapsed_seconds": 2731,
   "per_keyword": {
-    "Adele-hues%5": {
-      "target": 100,
+    "promo exclusive": {
+      "target": 7,
       "status": "ok"
     },
-    "Fashion-dujour": {
-      "target": 100,
+    "offre limit\u00e9e": {
+      "target": 7,
       "status": "ok"
     },
-    "BoutiqueFortune NOR": {
-      "target": 100,
-      "status": "cancelled"
+    "nouveaut\u00e9 tendance": {
+      "target": 6,
+      "status": "ok"
     }
   },
   "parameters": {

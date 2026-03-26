@@ -113,7 +113,37 @@ def resolve_library_url(library_url: str) -> str:
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _token() -> str:
+    # Runtime config (set via /accesstoken) takes precedence over .env
+    try:
+        from ads_config import load_config as _load_cfg
+        rt = _load_cfg().get("meta_access_token", "")
+        if rt:
+            return rt
+    except Exception:
+        pass
     return os.environ.get("META_ACCESS_TOKEN", "")
+
+
+def validate_token(token: str) -> tuple[bool, str]:
+    """Validate a candidate token against the Meta /me endpoint without touching the live token."""
+    if not token:
+        return False, "Token is empty"
+    try:
+        r = httpx.get(
+            f"{GRAPH_URL}/me",
+            params={"fields": "id,name", "access_token": token},
+            timeout=15,
+        )
+        if not r.is_success:
+            try:
+                msg = r.json().get("error", {}).get("message", r.text[:200])
+            except Exception:
+                msg = r.text[:200]
+            return False, msg
+        info = r.json()
+        return True, f"Token valid — authenticated as: {info.get('name', '?')} (id={info.get('id', '?')})"
+    except Exception as e:
+        return False, str(e)
 
 
 def _get(path: str, params: dict | None = None) -> dict:

@@ -49,7 +49,6 @@ from creative_hunt_sheet import (
     count_all_creatives,
     count_empty_slots,
     delete_creative_slot,
-    send_back_to_pending,
     EXTRA_CREATIVE_COLS,
     APPROVED_TAB,
 )
@@ -136,7 +135,6 @@ async def _post_init(application: Application) -> None:
             BotCommand("creativehunt", "Search for creatives (video/image)"),
             BotCommand("stop",         "Stop current hunt session"),
             BotCommand("scrollrounds", "Set manual scroll rounds (0 = auto)"),
-            BotCommand("setcookies",   "Update Facebook session cookies"),
             BotCommand("help",         "Show help"),
         ])
         logger.info("[creative_hunt_bot] Telegram command menu registered")
@@ -168,9 +166,6 @@ def _media_type_keyboard(product_idx: int, sku: str = "") -> InlineKeyboardMarku
         [
             InlineKeyboardButton("🚀 READY FOR ADS", callback_data=f"ch_fin_ready:{sku}"),
             InlineKeyboardButton("⏭ Next Product",   callback_data=f"ch_skip_product:{product_idx}"),
-        ],
-        [
-            InlineKeyboardButton("⬅️ Back to Pending", callback_data=f"ch_back_pending:{sku}"),
         ],
     ])
 
@@ -210,9 +205,6 @@ def _candidate_keyboard(sku: str, cand_idx: int) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🚀 READY FOR ADS",        callback_data=f"ch_fin_ready:{tag}"),
-        ],
-        [
-            InlineKeyboardButton("⬅️ Back to Pending",      callback_data=f"ch_back_pending:{sku}"),
         ],
     ])
 
@@ -264,8 +256,12 @@ async def _show_product_prompt(bot, session: dict):
     name_line = f"🛍 <b>{_esc(product_name)}</b>\n" if product_name else ""
     shop_line = f"🔗 {_esc(url_landing_page)}\n"    if url_landing_page else ""
 
-    # Count only — URLs sent as plain follow-up message to avoid Entities_too_long.
-    creatives_lines = f"📚 <b>{total_saved}</b> creative(s) saved\n" if saved_creatives else ""
+    creatives_lines = ""
+    for i, url in enumerate(saved_creatives):
+        # Only show short label — full URL is in the button to avoid message too long
+        label = url if url.startswith("https://www.facebook.com") else "CDN media"
+        short = label[:60] + "…" if len(label) > 60 else label
+        creatives_lines += f"📚 <b>{i+1}/{total_saved}</b> {_esc(short)}\n"
 
     text = (
         f"<b>Product {product_idx + 1} / {total}</b>\n\n"
@@ -278,10 +274,13 @@ async def _show_product_prompt(bot, session: dict):
     )
 
     kb = _media_type_keyboard(product_idx, sku)
-    creative_rows = [
-        [InlineKeyboardButton(f"\U0001f5d1 Remove #{i+1}", callback_data=f"ch_del_creative:{sku}:{i}")]
-        for i in range(len(saved_creatives))
-    ]
+    creative_rows = []
+    for i, url in enumerate(saved_creatives):
+        short = url[:40] + "…" if len(url) > 40 else url
+        creative_rows.append([
+            InlineKeyboardButton(f"📚 {i+1} — {short}", url=url),
+            InlineKeyboardButton("🗑", callback_data=f"ch_del_creative:{sku}:{i}"),
+        ])
     if creative_rows:
         kb = InlineKeyboardMarkup(creative_rows + list(kb.inline_keyboard))
 
@@ -292,20 +291,6 @@ async def _show_product_prompt(bot, session: dict):
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
-        # Send creative URLs as plain text so Telegram auto-links them.
-    if saved_creatives:
-        entries = [f"{i+1}. {url}" for i, url in enumerate(saved_creatives)]
-        header = "Saved creatives - tap to open:\n\n"
-        chunk, chunk_len = [], 0
-        for entry in entries:
-            ln = entry + "\n"
-            if chunk_len + len(ln) > 4000:
-                await bot.send_message(chat_id=chat_id, text=header+''.join(chunk), disable_web_page_preview=True)
-                chunk, chunk_len = [], 0
-            chunk.append(ln)
-            chunk_len += len(ln)
-        if chunk:
-            await bot.send_message(chat_id=chat_id, text=header+''.join(chunk), disable_web_page_preview=True)
 
 
 # ── Keyword building ──────────────────────────────────────────────────────
@@ -725,16 +710,11 @@ async def cmd_creativehunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    loading_msg = await update.message.reply_text("⏳ Loading APPROVED products…")
-    try:
-        products = await asyncio.get_running_loop().run_in_executor(None, load_approved_products)
-    except Exception as e:
-        logger.error(f"[creativehunt] load_approved_products failed: {e}")
-        await loading_msg.edit_text("❌ Failed to load products. Please try again.")
-        return
+    await update.message.reply_text("⏳ Loading APPROVED products…")
+    products = load_approved_products()
 
     if not products:
-        await loading_msg.edit_text(
+        await update.message.reply_text(
             "📭 <b>No products found</b> in APPROVED.\n\n"
             "Approve products in the Approval Bot first — they will appear here.",
             parse_mode="HTML",
@@ -795,14 +775,6 @@ async def cmd_scrollrounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-
-async def cmd_setcookies(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["awaiting_cookies"] = True
-    await update.message.reply_text(
-        "🍪 <b>Update Facebook Cookies</b>\n\nPaste your cookies JSON array (from Cookie-Editor) and send it.",
-        parse_mode="HTML",
-    )
-
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "❓ <b>Creative Hunt Bot — Help</b>\n\n"
@@ -846,35 +818,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = _sessions.get(user_id)
 
     # ── Capture scroll rounds reply ────────────────────────────────────────
-    if context.user_data.get("awaiting_cookies"):
-        import json as _json, pathlib as _pl
-        accumulated = context.user_data.get("pending_cookies_text", "") + text
-        context.user_data["pending_cookies_text"] = accumulated
-        try:
-            raw = _json.loads(accumulated)
-            if not isinstance(raw, list): raise ValueError("Expected a JSON array")
-            smap = {"no_restriction":"None","lax":"Lax","strict":"Strict"}
-            pw = []
-            for c in raw:
-                if c.get("domain","").lstrip(".") not in ("facebook.com","www.facebook.com"): continue
-                ss = smap.get((c.get("sameSite") or "no_restriction").lower(),"None")
-                ck = {"name":c["name"],"value":c["value"],"domain":c["domain"],"path":c.get("path","/"),"secure":c.get("secure",True),"httpOnly":c.get("httpOnly",False),"sameSite":ss}
-                if c.get("expirationDate"): ck["expires"]=int(c["expirationDate"])
-                pw.append(ck)
-            if not pw: raise ValueError("No facebook.com cookies found")
-            sp = _pl.Path(__file__).parent / "fb_auth_state.json"
-            sp.write_text(_json.dumps({"cookies":pw,"origins":[]},indent=2))
-            context.user_data.pop("awaiting_cookies")
-            context.user_data.pop("pending_cookies_text", None)
-            await update.message.reply_text(f"✅ {len(pw)} cookies saved. New session active.", reply_markup=MAIN_MENU)
-        except _json.JSONDecodeError:
-            await update.message.reply_text("📨 Got part 1, send the rest…")
-        except Exception as e:
-            context.user_data.pop("awaiting_cookies")
-            context.user_data.pop("pending_cookies_text", None)
-            await update.message.reply_text(f"❌ Failed: {e}")
-        return
-
     if context.user_data.get("awaiting_scroll_rounds"):
         context.user_data.pop("awaiting_scroll_rounds")
         try:
@@ -1190,53 +1133,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(_run_search_and_show(context.bot, session))
         return
 
-    # ── BACK TO PENDING ──────────────────────────────────────────────────────
-    if data.startswith("ch_back_pending:"):
-        back_sku = data[len("ch_back_pending:"):]
-        session  = _sessions.get(user_id)
-        product  = {}
-        if session and session.get("products"):
-            idx = session.get("product_idx", 0)
-            prods = session["products"]
-            if idx < len(prods):
-                product = prods[idx]
-        url_product = str(product.get("URL PRODUCT", "")).strip()
-
-        await query.message.reply_text("⏳ Sending back to Pending…")
-        loop = asyncio.get_running_loop()
-
-        ok = await loop.run_in_executor(
-            None, lambda: send_back_to_pending(back_sku, APPROVED_TAB)
-        )
-        if ok:
-            # Try to delete Shopify product
-            if url_product:
-                try:
-                    import shopify_cache as _sc
-                    _sc.load_from_file()
-                    shopify_pid = None
-                    for pid, cached in _sc._cache.items():
-                        if cached.source_url and cached.source_url.strip() == url_product:
-                            shopify_pid = pid
-                            break
-                    if shopify_pid:
-                        from shopify_client import delete_product as _del_shopify
-                        deleted = await loop.run_in_executor(None, lambda: _del_shopify(shopify_pid))
-                        if deleted:
-                            await query.message.reply_text("🗑 Shopify product deleted.")
-                except Exception as e:
-                    logger.warning(f"[creative_hunt] Shopify delete failed: {e}")
-
-            await query.message.reply_text(
-                f"✅ <b>{_esc(back_sku)}</b> sent back to Pending.",
-                parse_mode="HTML",
-            )
-            if session:
-                await _advance_product(context.bot, session)
-        else:
-            await query.message.reply_text("❌ Failed to move product back to Pending.")
-        return
-
     # ── READY FOR ADS: show confirmation menu ─────────────────────────────
     if data.startswith("ch_fin_ready:"):
         session = _sessions.get(user_id)
@@ -1316,7 +1212,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(f"⏳ Finalizing with <b>{num}</b> creative(s)…", parse_mode="HTML")
 
         ok = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: finalize_to_ready_for_ads(conf_sku, 10)
+            None, lambda: finalize_to_ready_for_ads(conf_sku, num)
         )
 
         if ok:
@@ -1418,16 +1314,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("⚠️ No active creative to save.")
             return
 
-        # Save the Ads Library link (short, stable) instead of long CDN URLs.
-        # ads_launch_bot → meta_ads_service.download_media() already resolves
-        # Ads Library pages to CDN URLs at download time, so this is safe.
-        lib_url = str(ad.get("ad_library_url", "")).strip()
+        # Save the actual CDN media URL so the Ads Launch Bot can download it.
+        # Fallback chain: media_url → main_image_url (thumbnail) → ad_library_url
         media_url_cdn = (
             str(ad.get("media_url", "")).strip()
             or str(ad.get("main_image_url", "")).strip()
             or str(ad.get("thumbnail_url", "")).strip()
         )
-        ad_url = lib_url or media_url_cdn  # prefer library link, CDN as fallback
+        lib_url = str(ad.get("ad_library_url", "")).strip()
+        ad_url = media_url_cdn or lib_url
 
         if not ad_url:
             await query.message.reply_text("⚠️ No media URL found for this creative.")
@@ -1646,7 +1541,6 @@ def build_creative_hunt_application() -> Application:
     app.add_handler(CommandHandler("creativehunt", cmd_creativehunt))
     app.add_handler(CommandHandler("stop",         cmd_stop))
     app.add_handler(CommandHandler("scrollrounds", cmd_scrollrounds))
-    app.add_handler(CommandHandler("setcookies",   cmd_setcookies))
     app.add_handler(CommandHandler("help",         cmd_help))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
