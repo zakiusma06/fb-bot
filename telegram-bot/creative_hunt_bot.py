@@ -264,8 +264,12 @@ async def _show_product_prompt(bot, session: dict):
     name_line = f"🛍 <b>{_esc(product_name)}</b>\n" if product_name else ""
     shop_line = f"🔗 {_esc(url_landing_page)}\n"    if url_landing_page else ""
 
-    # Count only — URLs sent as plain follow-up message to avoid Entities_too_long.
-    creatives_lines = f"📚 <b>{total_saved}</b> creative(s) saved\n" if saved_creatives else ""
+    # Inline Ads Library links (short URLs) directly in the card.
+    if saved_creatives:
+        numbered = "\n".join(f"{i+1}. {u}" for i, u in enumerate(saved_creatives))
+        creatives_lines = f"📚 <b>{total_saved}</b> creative(s) saved\n{numbered}\n"
+    else:
+        creatives_lines = ""
 
     text = (
         f"<b>Product {product_idx + 1} / {total}</b>\n\n"
@@ -292,20 +296,8 @@ async def _show_product_prompt(bot, session: dict):
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
-        # Send creative URLs as plain text so Telegram auto-links them.
-    if saved_creatives:
-        entries = [f"{i+1}. {url}" for i, url in enumerate(saved_creatives)]
-        header = "Saved creatives - tap to open:\n\n"
-        chunk, chunk_len = [], 0
-        for entry in entries:
-            ln = entry + "\n"
-            if chunk_len + len(ln) > 4000:
-                await bot.send_message(chat_id=chat_id, text=header+''.join(chunk), disable_web_page_preview=True)
-                chunk, chunk_len = [], 0
-            chunk.append(ln)
-            chunk_len += len(ln)
-        if chunk:
-            await bot.send_message(chat_id=chat_id, text=header+''.join(chunk), disable_web_page_preview=True)
+    # URLs are inlined in the product card above — no follow-up message needed.
+    # Chunked sender kept as fallback if CDN URLs ever appear again (Telegram length safety).
 
 
 # ── Keyword building ──────────────────────────────────────────────────────

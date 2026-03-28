@@ -51,3 +51,4 @@ telegram-bot/secrets.env
 .env
 *.env
 secrets.txt
+.venv/
